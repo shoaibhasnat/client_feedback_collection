@@ -1,3 +1,4 @@
+import { requireSuperAdmin } from "@/lib/auth";
 import { notFound } from "next/navigation";
 import { Badge, Card, CardHeader, Dl, PageHeader } from "@/components/ui";
 import { ConfirmSubmit } from "@/components/ui/client";
@@ -8,6 +9,7 @@ import { revokeInvite, setWorkspaceStatus } from "../../actions";
 import { EditWorkspaceForm, InviteLinkForm } from "./forms";
 
 export default async function WorkspaceDetailPage({ params }: PageProps<"/superadmin/workspaces/[id]">) {
+  await requireSuperAdmin();
   const { id } = await params;
   const ws = (await listWorkspaces()).find((w) => w.id === id);
   if (!ws) notFound();

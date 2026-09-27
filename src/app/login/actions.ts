@@ -8,6 +8,7 @@ import { logAudit } from "@/lib/audit";
 import { clientIp } from "@/lib/crypto";
 import { rateLimit } from "@/lib/rate-limit";
 import { env } from "@/lib/env";
+import { safeRelativePath } from "@/lib/utils";
 
 export type AuthState = { error?: string; message?: string };
 
@@ -18,7 +19,7 @@ const loginSchema = z.object({
 });
 
 function safeNext(next: string | undefined): string | null {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : null;
+  return safeRelativePath(next);
 }
 
 export async function signIn(_prev: AuthState, formData: FormData): Promise<AuthState> {

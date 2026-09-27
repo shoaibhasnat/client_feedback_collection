@@ -1,3 +1,4 @@
+import { requireSuperAdmin } from "@/lib/auth";
 import Link from "next/link";
 import { Badge, Card, CardHeader, EmptyState, Input, PageHeader, Table, Td, Th } from "@/components/ui";
 import { listWorkspaces, formatBytes } from "@/lib/superadmin";
@@ -5,6 +6,7 @@ import { formatDate } from "@/lib/utils";
 import { CreateWorkspaceForm } from "./create-workspace-form";
 
 export default async function WorkspacesPage({ searchParams }: PageProps<"/superadmin">) {
+  await requireSuperAdmin();
   const sp = await searchParams;
   const q = typeof sp.q === "string" ? sp.q.trim() : "";
   const workspaces = await listWorkspaces(q || undefined);

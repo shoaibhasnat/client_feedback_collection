@@ -57,3 +57,21 @@ export function one<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
   return value ?? null;
 }
+
+/**
+ * Validate a caller-supplied redirect target. Only same-site paths are allowed:
+ * one leading slash followed by a non-slash, non-backslash character, and no
+ * control characters. Rejects `//host`, `/\host` (which browsers resolve to an
+ * absolute URL) and scheme-relative values, closing off open-redirect abuse.
+ */
+export function safeRelativePath(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  // One leading slash, then a character that is neither slash nor backslash.
+  if (!/^\/[^/\\]/.test(value)) return null;
+  // Reject ASCII control characters (incl. tab/newline tricks used to smuggle a host).
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x1f || code === 0x7f) return null;
+  }
+  return value;
+}

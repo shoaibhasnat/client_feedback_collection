@@ -1,3 +1,4 @@
+import { requireSuperAdmin } from "@/lib/auth";
 import Link from "next/link";
 import { Badge, EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
 import { ConfirmSubmit } from "@/components/ui/client";
@@ -6,6 +7,7 @@ import { formatDate } from "@/lib/utils";
 import { revokeInvite } from "../actions";
 
 export default async function InvitesPage() {
+  await requireSuperAdmin();
   const admin = createAdminClient();
   const { data: invites } = await admin
     .from("invites")

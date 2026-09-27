@@ -1,8 +1,10 @@
+import { requireSuperAdmin } from "@/lib/auth";
 import { EmptyState, PageHeader, Table, Td, Th } from "@/components/ui";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDate } from "@/lib/utils";
 
 export default async function AuditPage() {
+  await requireSuperAdmin();
   const admin = createAdminClient();
   const { data: rows } = await admin
     .from("audit_log")
