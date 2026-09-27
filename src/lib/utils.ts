@@ -75,3 +75,13 @@ export function safeRelativePath(value: string | null | undefined): string | nul
   }
   return value;
 }
+
+/**
+ * An href for a stored, user-supplied URL, or undefined. Only http(s) and mailto are allowed, so a
+ * value written straight through the API (bypassing form validation) can never become a script URL.
+ */
+export function safeHref(value: string | null | undefined): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const v = value.trim();
+  return /^(https?:\/\/|mailto:)[^\s]+$/i.test(v) ? v : undefined;
+}

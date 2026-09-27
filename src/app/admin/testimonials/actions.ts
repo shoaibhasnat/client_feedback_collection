@@ -16,6 +16,7 @@ import { mappingAllows } from "@/lib/form/catalog";
 import { CLIENT_FIELD_OPTIONS } from "@/lib/form/snapshot";
 import { pickTagIds } from "@/lib/tags";
 import { revalidateSite } from "@/lib/site/cache";
+import { isSafeStoragePath } from "@/lib/storage-path";
 
 type Ctx = Awaited<ReturnType<typeof assertWritable>>;
 
@@ -237,7 +238,7 @@ export async function mergeIntoClientAction(submissionId: string, formData: Form
       const emails = ((client?.emails ?? []) as string[]).filter((e) => e.toLowerCase() !== value.toLowerCase());
       patch.emails = [value.toLowerCase(), ...emails];
     } else if (target === "photo_url" || target === "logo_url") {
-      if (value.startsWith(`${ctx.workspace.id}/`)) patch[target] = value;
+      if (isSafeStoragePath(value, ctx.workspace.id)) patch[target] = value;
     } else {
       patch[target] = value;
     }

@@ -10,6 +10,7 @@ import { rateLimit } from "@/lib/rate-limit";
 import { storeImage, UploadError } from "@/lib/uploads";
 import { revalidateSite } from "@/lib/site/cache";
 import { VIDEO_STORAGE_MAX_MB } from "@/lib/video-limits";
+import { isSafeStoragePath } from "@/lib/storage-path";
 
 type Result = { ok: true } | { ok: false; error: string; closed?: boolean; fieldErrors?: Record<string, string> };
 
@@ -45,7 +46,7 @@ function scrubImagePaths(values: FormValues, request: LoadedRequest, submissionI
     if (item.type !== "image" || item.section === "question") continue;
     const bucket = values[item.section];
     const v = bucket[item.key];
-    if (typeof v === "string" && v && !v.startsWith(prefix) && v !== item.prefill_value) bucket[item.key] = null;
+    if (typeof v === "string" && v && !isSafeStoragePath(v, prefix) && !(v === item.prefill_value && isSafeStoragePath(v, request.workspace_id))) bucket[item.key] = null;
   }
 }
 
@@ -92,6 +93,20 @@ export async function saveProgress(token: string, step: number, input: Partial<F
 
 export type UploadResult = { ok: true; path: string; url: string } | { ok: false; error: string };
 
+/** Most files one submission may hold (photo, logo, a few replacements, video + thumbnail). */
+const MAX_SUBMISSION_FILES = 20;
+
+/**
+ * Storage is shared by every workspace, so an open request link must not be able to fill it.
+ * Returns the submission folder's files, or an error once the per-submission cap is reached.
+ */
+async function submissionFiles(folder: string): Promise<{ names: string[] } | { error: string }> {
+  const { data } = await createAdminClient().storage.from("uploads").list(folder, { limit: MAX_SUBMISSION_FILES + 5 });
+  const names = (data ?? []).filter((f) => f.id).map((f) => f.name);
+  if (names.length >= MAX_SUBMISSION_FILES) return { error: "Too many uploads for this form. Remove a file or contact the sender." };
+  return { names };
+}
+
 export async function uploadFormImage(token: string, itemKey: string, formData: FormData): Promise<UploadResult> {
   const request = await openRequest(token, "upload", 10);
   if ("ok" in request) return { ok: false, error: request.ok ? "Upload failed." : request.error };
@@ -103,6 +118,8 @@ export async function uploadFormImage(token: string, itemKey: string, formData: 
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose an image." };
 
   const submissionId = await ensureSubmission(request);
+  const quota = await submissionFiles(`${request.workspace_id}/submissions/${submissionId}`);
+  if ("error" in quota) return { ok: false, error: quota.error };
   const admin = createAdminClient();
   try {
     const square = item.maps_to_client_field === "photo_url" || item.key === "photo";
@@ -214,7 +231,14 @@ export async function startVideoUpload(token: string, input: { size: number; typ
   }
 
   const submissionId = await ensureSubmission(request);
-  const path = `${videoFolder(request, submissionId)}/video-${randomToken(9)}.${ext}`;
+  const folder = videoFolder(request, submissionId);
+  const quota = await submissionFiles(folder);
+  if ("error" in quota) return { ok: false, error: quota.error };
+  // Only one upload in flight: earlier started-but-unfinished videos are removed (the attached one is kept).
+  const { data: current } = await createAdminClient().from("submissions").select("video_url").eq("id", submissionId).single();
+  const orphans = quota.names.filter((n) => n.startsWith("video-") && `${folder}/${n}` !== current?.video_url).map((n) => `${folder}/${n}`);
+  if (orphans.length) await createAdminClient().storage.from("uploads").remove(orphans);
+  const path = `${folder}/video-${randomToken(9)}.${ext}`;
   const { data, error } = await createAdminClient().storage.from("uploads").createSignedUploadUrl(path);
   if (error || !data) return { ok: false, error: "Couldn't start the upload. Try again." };
   return { ok: true, url: data.signedUrl, path };
@@ -231,7 +255,7 @@ export async function finishVideoUpload(token: string, path: string, formData: F
   const submissionId = await ensureSubmission(request);
   const folder = videoFolder(request, submissionId);
   const name = path.slice(folder.length + 1);
-  if (!path.startsWith(`${folder}/video-`) || name.includes("/")) return { ok: false, error: "Unknown upload." };
+  if (!isSafeStoragePath(path, folder) || !name.startsWith("video-") || name.includes("/")) return { ok: false, error: "Unknown upload." };
 
   const admin = createAdminClient();
   const { data: files } = await admin.storage.from("uploads").list(folder, { search: name, limit: 5 });
@@ -263,7 +287,7 @@ export async function finishVideoUpload(token: string, path: string, formData: F
     .is("submitted_at", null);
   if (error) return { ok: false, error: "Couldn't save the video. Try again." };
 
-  const stale = [previous?.video_url, previous?.video_thumbnail_url].filter((p): p is string => !!p && p.startsWith(`${folder}/`) && p !== path);
+  const stale = [previous?.video_url, previous?.video_thumbnail_url].filter((p): p is string => isSafeStoragePath(p, folder) && p !== path);
   if (stale.length) await admin.storage.from("uploads").remove(stale);
 
   const { data: signed } = await admin.storage.from("uploads").createSignedUrl(path, 3600);
@@ -278,7 +302,7 @@ export async function removeVideo(token: string): Promise<{ ok: boolean }> {
   if (!sub) return { ok: true };
   await admin.from("submissions").update({ video_url: null, video_thumbnail_url: null }).eq("id", sub.id).is("submitted_at", null);
   const folder = videoFolder(request, sub.id);
-  const files = [sub.video_url, sub.video_thumbnail_url].filter((p): p is string => !!p && p.startsWith(`${folder}/`));
+  const files = [sub.video_url, sub.video_thumbnail_url].filter((p): p is string => isSafeStoragePath(p, folder));
   if (files.length) await admin.storage.from("uploads").remove(files);
   return { ok: true };
 }

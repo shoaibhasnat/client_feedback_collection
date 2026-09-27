@@ -4,6 +4,7 @@ import { CARD_DESIGNS, CARD_SIZES, renderImageCard, type CardDesign, type CardSi
 import { consentViolations } from "@/lib/consent";
 import type { ConsentLevel } from "@/lib/form/types";
 import { parseTheme } from "@/lib/site/config";
+import { isSafeStoragePath } from "@/lib/storage-path";
 
 const text = (body: string, status: number) =>
   new Response(body, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "private, no-store" } });
@@ -38,7 +39,7 @@ export async function GET(req: Request, ctx: RouteContext<"/admin/testimonials/[
 
   // Satori can't decode WebP: convert the (workspace-owned) photo to a small PNG data URL.
   let photo: string | null = null;
-  if (t.photo_url && t.photo_url.startsWith(`${workspace.id}/`)) {
+  if (isSafeStoragePath(t.photo_url, workspace.id)) {
     const { data } = await supabase.storage.from("uploads").download(t.photo_url);
     if (data) {
       const png = await sharp(Buffer.from(await data.arrayBuffer())).resize(224, 224, { fit: "cover" }).png().toBuffer();

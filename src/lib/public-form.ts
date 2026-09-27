@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { TemplateSnapshot } from "@/lib/form/types";
 import { parseTheme, type FontName } from "@/lib/site/config";
+import { isSafeStoragePath } from "@/lib/storage-path";
 
 // The public form has no login: the request token is the only key (brief 3.6).
 // Every query below is pinned to the single request that token maps to, and its workspace.
@@ -73,7 +74,7 @@ export async function loadFormBranding(workspaceId: string, ownerPhotoPath: stri
   const palette = site.mode === "dark" ? site.dark : site.light;
   let backgroundImage: string | null = null;
   const bg = site.form.background_image;
-  if (bg && bg.startsWith(`${workspaceId}/`)) {
+  if (isSafeStoragePath(bg, workspaceId)) {
     const { data: signedBg } = await admin.storage.from("uploads").createSignedUrl(bg, 3600);
     backgroundImage = signedBg?.signedUrl ?? null;
   }
@@ -88,7 +89,7 @@ export async function loadFormBranding(workspaceId: string, ownerPhotoPath: stri
   const profile = (data?.profile ?? {}) as Record<string, string | null>;
   const photoPath = profile.photo_url ?? ownerPhotoPath;
   let photoUrl: string | null = null;
-  if (photoPath && photoPath.startsWith(`${workspaceId}/`)) {
+  if (isSafeStoragePath(photoPath, workspaceId)) {
     const { data: signed } = await admin.storage.from("uploads").createSignedUrl(photoPath, 3600);
     photoUrl = signed?.signedUrl ?? null;
   }
@@ -107,8 +108,8 @@ export async function signFormImages(
   const prefixes = [`${workspaceId}/clients/${scope.clientId}/`];
   if (scope.submissionId) prefixes.push(`${workspaceId}/submissions/${scope.submissionId}/`);
   // Exact paths the owner froze into this request's snapshot (e.g. a photo merged from an earlier submission).
-  const frozen = new Set((scope.snapshotPrefills ?? []).filter((p) => p.startsWith(`${workspaceId}/`)));
-  const valid = [...new Set(paths)].filter((p) => frozen.has(p) || prefixes.some((prefix) => p.startsWith(prefix)));
+  const frozen = new Set((scope.snapshotPrefills ?? []).filter((p) => isSafeStoragePath(p, workspaceId)));
+  const valid = [...new Set(paths)].filter((p) => frozen.has(p) || prefixes.some((prefix) => isSafeStoragePath(p, prefix)));
   if (!valid.length) return {};
   const admin = createAdminClient();
   const { data } = await admin.storage.from("uploads").createSignedUrls(valid, 3600);

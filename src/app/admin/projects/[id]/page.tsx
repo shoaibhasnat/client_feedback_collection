@@ -9,6 +9,7 @@ import { formatDate, humanize } from "@/lib/utils";
 import { deleteAttachmentAction, deleteProjectAction } from "../actions";
 import { formatCustomValue, type CustomFieldDef } from "@/lib/custom-fields";
 import { AttachmentForm } from "./attachment-form";
+import { safeHref } from "@/lib/utils";
 
 export default async function ProjectDetailPage({ params }: PageProps<"/admin/projects/[id]">) {
   const { id } = await params;
@@ -82,7 +83,7 @@ export default async function ProjectDetailPage({ params }: PageProps<"/admin/pr
                   <ul className="mt-1 space-y-1 text-sm">
                     {links.map((l) => (
                       <li key={l.url}>
-                        <a href={l.url} target="_blank" rel="noreferrer" className="text-blue-700 underline">
+                        <a href={safeHref(l.url)} target="_blank" rel="noreferrer" className="text-blue-700 underline">
                           {l.label || l.url}
                         </a>
                       </li>

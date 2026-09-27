@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { env } from "@/lib/env";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { realtimeOptions } from "@/lib/supabase/transport";
+import { isWellFormedStoragePath } from "@/lib/storage-path";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 export const isUuid = (v: string) => UUID.test(v);
@@ -16,7 +17,7 @@ const notFound = () => new Response("Not found", { status: 404, headers: { "Cach
  */
 export async function streamPublicFile(resolve: (anon: ReturnType<typeof anonClient>) => Promise<string | null>, maxAge: number) {
   const path = await resolve(anonClient());
-  if (!path) return notFound();
+  if (!isWellFormedStoragePath(path)) return notFound();
   const { data, error } = await createAdminClient().storage.from("uploads").download(path);
   if (error || !data) return notFound();
   const type = data.type && data.type.startsWith("image/") ? data.type : "application/octet-stream";
@@ -37,7 +38,7 @@ export async function streamPublicFile(resolve: (anon: ReturnType<typeof anonCli
  */
 export async function redirectToPublicFile(resolve: (anon: ReturnType<typeof anonClient>) => Promise<string | null>) {
   const path = await resolve(anonClient());
-  if (!path) return notFound();
+  if (!isWellFormedStoragePath(path)) return notFound();
   const { data } = await createAdminClient().storage.from("uploads").createSignedUrl(path, 600);
   if (!data?.signedUrl) return notFound();
   return new Response(null, {

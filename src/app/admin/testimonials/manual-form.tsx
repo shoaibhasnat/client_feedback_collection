@@ -5,6 +5,7 @@ import { Field, Input, Select } from "@/components/ui";
 import type { EditorState } from "./actions";
 import { EditorForm, type EditorValues } from "./testimonial-editor";
 import type { Tag } from "@/lib/tags";
+import { safeHref } from "@/lib/utils";
 
 export function ManualTestimonialForm({
   action,
@@ -57,7 +58,7 @@ export function ManualTestimonialForm({
             <Field label="Screenshot as proof" htmlFor="proof" hint="Optional. Replaces the link as proof if both are given." className="sm:col-span-2">
               <div className="flex items-center gap-3">
                 {proofUrl && (
-                  <a href={proofUrl} target="_blank" rel="noreferrer" className="text-sm underline">
+                  <a href={safeHref(proofUrl)} target="_blank" rel="noreferrer" className="text-sm underline">
                     Current proof
                   </a>
                 )}

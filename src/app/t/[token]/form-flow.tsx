@@ -10,6 +10,7 @@ import { fontStack } from "@/lib/site/fonts";
 import { finishVideoUpload, removeVideo, saveProgress, startVideoUpload, submitForm, uploadFormImage } from "./actions";
 import { VideoStep, type VideoUploadState } from "./video-step";
 import { VIDEO_STORAGE_MAX_MB } from "@/lib/video-limits";
+import { safeHref } from "@/lib/utils";
 
 /** PUT the file to the signed storage URL with progress events (fetch has no upload progress). */
 function putWithProgress(url: string, body: Blob, type: string, onProgress: (pct: number) => void): Promise<boolean> {
@@ -598,7 +599,8 @@ function ThankYou({
 }) {
   const cta = snapshot.settings.cta;
   const [copied, setCopied] = useState(false);
-  const target = cta.type === "share" ? cta.url || shareUrl : cta.url;
+  // The snapshot is owner data: only an http(s) link is ever rendered or copied.
+  const target = safeHref(cta.type === "share" ? cta.url || shareUrl : cta.url)?.replace(/^mailto:.*/i, "");
   return (
     <div className="flex flex-col items-center pt-10 text-center">
       <div className="mb-5 flex size-14 items-center justify-center rounded-full bg-[var(--tc-primary)] text-white">

@@ -10,6 +10,7 @@ import { deleteClientAction, deleteNoteAction } from "../actions";
 import { TagChip } from "@/components/tags";
 import { formatCustomValue, type CustomFieldDef } from "@/lib/custom-fields";
 import { NoteForm } from "./note-form";
+import { safeHref } from "@/lib/utils";
 
 export default async function ClientDetailPage({ params }: PageProps<"/admin/clients/[id]">) {
   const { id } = await params;
@@ -104,9 +105,9 @@ export default async function ClientDetailPage({ params }: PageProps<"/admin/cli
                   ["Phone", client.phone],
                   ["WhatsApp", client.whatsapp],
                   ["Preferred contact", client.preferred_contact],
-                  ["LinkedIn", client.linkedin_url && <a key="l" className="underline" href={client.linkedin_url} target="_blank" rel="noreferrer">{client.linkedin_url}</a>],
-                  ["Website", client.website && <a key="w" className="underline" href={client.website} target="_blank" rel="noreferrer">{client.website}</a>],
-                  ["Upwork", client.upwork_url && <a key="u" className="underline" href={client.upwork_url} target="_blank" rel="noreferrer">Profile / contract</a>],
+                  ["LinkedIn", client.linkedin_url && <a key="l" className="underline" href={safeHref(client.linkedin_url)} target="_blank" rel="noreferrer">{client.linkedin_url}</a>],
+                  ["Website", client.website && <a key="w" className="underline" href={safeHref(client.website)} target="_blank" rel="noreferrer">{client.website}</a>],
+                  ["Upwork", client.upwork_url && <a key="u" className="underline" href={safeHref(client.upwork_url)} target="_blank" rel="noreferrer">Profile / contract</a>],
                   ["Other links", (client.socials as string[]).join(", ")],
                   ["Location", [client.city, client.country].filter(Boolean).join(", ")],
                   ["Time zone", client.timezone],

@@ -6,6 +6,7 @@ import type { FormValues } from "@/lib/form/types";
 import { clientIp } from "@/lib/crypto";
 import { rateLimit } from "@/lib/rate-limit";
 import { FormFlow } from "./form-flow";
+import { isSafeStoragePath } from "@/lib/storage-path";
 
 export const metadata: Metadata = {
   title: "Share your feedback",
@@ -98,7 +99,7 @@ export default async function TestimonialFormPage({ params }: PageProps<"/t/[tok
   // Resume an uploaded video (only a file in this submission's own folder).
   let initialVideo: { path: string; url: string | null } | null = null;
   const videoPath = draft?.video_url;
-  if (snapshot.settings.video_enabled && videoPath && videoPath.startsWith(`${request.workspace_id}/submissions/${draft!.id}/`)) {
+  if (snapshot.settings.video_enabled && isSafeStoragePath(videoPath, `${request.workspace_id}/submissions/${draft!.id}/`)) {
     const { data: signed } = await admin.storage.from("uploads").createSignedUrl(videoPath, 3600);
     initialVideo = { path: videoPath, url: signed?.signedUrl ?? null };
     values = { ...values, video_path: videoPath };
