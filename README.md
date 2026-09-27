@@ -1,11 +1,11 @@
-# Testimonial Collector — Phases 1–3 (Collect, Configure, Showcase)
+# Testimonial Collector — Phases 1–4a (Collect, Configure, Showcase, Extras part 1)
 
 A multi-tenant web app where independent businesses collect structured client testimonials,
 keep a lightweight CRM of clients and projects, and review submissions. Built from
-*Testimonial Collector App — Developer Brief* (Sep 27, 2026). This repository covers **Phases 1–3**.
+*Testimonial Collector App — Developer Brief* (Sep 27, 2026). This repository covers **Phases 1–3 and 4a**.
 
 **Documentation:** [Application guide](docs/APP.md) (architecture, data model, security, conventions) ·
-[Phase 1 — Collect](docs/phases/PHASE-1.md) · [Phase 2 — Configure](docs/phases/PHASE-2.md) · [Phase 3 — Showcase](docs/phases/PHASE-3.md) (scope, acceptance criteria, verification, handover).
+[Phase 1 — Collect](docs/phases/PHASE-1.md) · [Phase 2 — Configure](docs/phases/PHASE-2.md) · [Phase 3 — Showcase](docs/phases/PHASE-3.md) · [Phase 4a — Video & approval](docs/phases/PHASE-4A.md) (scope, acceptance criteria, verification, handover).
 
 **Stack:** Next.js 16 (App Router, TypeScript) · Supabase (Postgres, Auth, Storage, Row Level Security) ·
 Tailwind CSS 4 · Zod · sharp · Vitest.
@@ -42,8 +42,18 @@ Tailwind CSS 4 · Zod · sharp · Vitest.
 | Appearance editor | Presets, light/dark palettes, curated self-hosted fonts, shape, sections, card fields, all public copy, logos/favicon/share image/form background, SEO, allowlisted analytics, last-10 version history; live preview |
 | Privacy & performance | Public pages read only through anon `public_*` SQL functions (tested: no private data in any output); Lighthouse mobile 94–96 |
 
-**Deferred to later phases (by design):** video, embeddable widget, image cards, client approval flow,
-CSV import/export, custom CSS, workspace deletion with 30-day purge and data export (Phase 4); TOTP two-factor.
+## What's in Phase 4a
+
+| Area | Included |
+| --- | --- |
+| Video | Optional/required video step on the client form: record in the browser (countdown, prompts, auto-stop) or upload; background upload with progress; resume. Owner can play, **download** (dashboard only) and choose to show it on the wall with a custom thumbnail; Full consent required (enforced in Postgres) |
+| Public wall | Video cards with a thumbnail and play button open an accessible lightbox; video is served through a short-lived signed redirect |
+| Client approval | One-time approval link (`/a/{token}`, hash stored only) for an edited quote; client approves or suggests changes; editing the quote voids the approval; approvals on Home |
+| Reminders | Copying the reminder message records it; "Needs a reminder" filter counts from the last reminder |
+
+**Deferred to later phases (by design):** embeddable widget, image cards, CSV import/export and data export,
+custom CSS (Phase 4b); workspace deletion with 30-day purge, super admin per-workspace export, TOTP two-factor,
+custom head snippet.
 
 ## Local setup
 
