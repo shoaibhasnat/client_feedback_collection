@@ -59,6 +59,9 @@ export default async function ClientDetailPage({ params }: PageProps<"/admin/cli
               <LinkButton href={`/admin/clients/${id}/edit`} variant="outline">
                 Edit
               </LinkButton>
+              <LinkButton href={`/admin/clients/${id}/form-preferences`} variant="outline">
+                Form preferences
+              </LinkButton>
               <LinkButton href={`/admin/projects/new?client=${id}`} variant="outline">
                 Add project
               </LinkButton>
