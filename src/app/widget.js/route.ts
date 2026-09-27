@@ -5,7 +5,7 @@ import { env } from "@/lib/env";
 // The iframe keeps the widget's styles and scripts isolated from the host page (plain HTML, WordPress, …).
 const loader = (origin: string) => `(function(){
   var ORIGIN=${JSON.stringify(origin)};
-  var RE=/^[0-9a-f]{32}\/[0-9a-f-]{36}$/;
+  var RE=/^[0-9a-f]{32}[/][0-9a-f-]{36}$/;
   var frames={};
   function mount(el){
     if(el.getAttribute("data-tc-mounted"))return;
