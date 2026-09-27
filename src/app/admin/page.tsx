@@ -67,6 +67,11 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
     <>
       <PageHeader
         title="Home"
+        description={
+          <a href={`/${workspace.slug}`} target="_blank" rel="noreferrer" className="font-medium text-slate-700 underline-offset-2 hover:underline">
+            View your public page ↗
+          </a>
+        }
         actions={
           !readOnly && (
             <>

@@ -5,7 +5,7 @@ that every phase builds on. Phase-specific scope, status and verification live i
 [`docs/phases/`](phases/). Setup and deploy commands live in the [README](../README.md).
 
 - **Source of truth for requirements:** *Testimonial Collector App — Developer Brief* (Sep 27, 2026), in the parent folder.
-- **Current state:** Phases 1 (Collect) and 2 (Configure) complete. See [Phase 1](phases/PHASE-1.md) · [Phase 2](phases/PHASE-2.md).
+- **Current state:** Phases 1–3 (Collect, Configure, Showcase) complete. See [Phase 1](phases/PHASE-1.md) · [Phase 2](phases/PHASE-2.md) · [Phase 3](phases/PHASE-3.md).
 
 ---
 
@@ -35,7 +35,7 @@ a **super admin** creates workspaces and invites owners.
 | --- | --- | --- | --- |
 | 1 | Collect | Tenancy + RLS, super admin, invites, login, clients/projects CRM, request links, client form (no video), inbox, basic testimonial editing | ✅ Done — [details](phases/PHASE-1.md) |
 | 2 | Configure | Form builder, per-client/per-request form settings, multiple templates, custom fields, full consent enforcement, manual testimonials, tags | ✅ Done — [details](phases/PHASE-2.md) |
-| 3 | Showcase | Public wall, appearance/theme editor, filtered links, collections, single-testimonial pages, SEO | Not started |
+| 3 | Showcase | Public wall, appearance/theme editor, filtered links, collections, single-testimonial pages, SEO | ✅ Done — [details](phases/PHASE-3.md) |
 | 4 | Extras | Video, embeddable widget, image cards, client approval flow, reminders, CSV import/export, custom CSS | Not started |
 
 ---
@@ -64,9 +64,11 @@ Browser ──► proxy.ts (session refresh, gate /admin & /superadmin)
    │
    ├── /login, /forgot-password, /reset-password, /auth/confirm   auth pages
    ├── /invite/[token]                                             invite acceptance
-   ├── /superadmin/**   ─► requireSuperAdmin() ─► service-role client (metadata only)
+   ├── /superadmin/**   ─► requireSuperAdmin() (every page + action) ─► service-role client (metadata only)
    ├── /admin/**        ─► requireOwner()      ─► user client (RLS-scoped)
-   └── /t/[token]       ─► loadRequestByToken() ─► service-role client pinned to one request
+   ├── /t/[token]       ─► loadRequestByToken() ─► service-role client pinned to one request
+   ├── /{slug}, /{slug}/c/{c}, /{slug}/t/view/{id} ─► anon client ─► public_* SECURITY DEFINER functions
+   └── /api/public/{media,brand,og}/…  ─► DB-approved path ─► stream from private bucket / render card
                                                      │
                                           Supabase: Postgres (RLS) + Storage (private bucket)
 ```
@@ -76,6 +78,7 @@ Browser ──► proxy.ts (session refresh, gate /admin & /superadmin)
 | Client | File | Used by | Guarantee |
 | --- | --- | --- | --- |
 | **User client** (anon key + session cookie) | `src/lib/supabase/server.ts` | Owner dashboard, all owner Server Actions | Postgres RLS limits every query to the caller's workspace. App code cannot bypass it. |
+| **Anon client + public functions** | `src/lib/site/public-data.ts` | Public wall, collections, single pages, OG cards | Anon has no table access; `public_*` functions return public columns of published items in active workspaces only. |
 | **Service-role client** | `src/lib/supabase/admin.ts` | Public token form, invite acceptance, super admin panel, audit log, sign-in bookkeeping | Bypasses RLS. **Every query must be scoped explicitly** (by token, invite hash, or super-admin check). Server-only (`import "server-only"`). |
 
 Rule of thumb: owner features always use the user client. Reach for the service-role client only
@@ -113,8 +116,9 @@ app/
 │  └─ migrations/
 │     ├─ 20260927000001_core.sql      enums, tables, tenancy helpers, RLS, triggers
 │     ├─ 20260927000002_seed_storage.sql  seed_workspace(), superadmin stats, storage bucket + policies
-│     └─ 20260928000001_phase2_configure.sql  prefill field, presets, submission column grants,
-│                                        consent + media triggers, frozen snapshots
+│     ├─ 20260928000001_phase2_configure.sql  prefill field, presets, submission column grants,
+│     │                                  consent + media triggers, frozen snapshots
+│     └─ 20260929000001_phase3_public_api.sql  anon-callable public_* read functions
 ├─ scripts/seed-superadmin.ts         super admin bootstrap
 ├─ src/
 │  ├─ proxy.ts                        session refresh + auth gate
@@ -131,6 +135,8 @@ app/
 │  │  ├─ form-preview.ts              builder preview (sample client)
 │  │  ├─ custom-fields.ts             custom field types, parsing, formatting
 │  │  ├─ tags.ts                      tag types, colours, id picking
+│  │  ├─ site/                        public site: config (theme/layout/SEO schemas, presets, CSS),
+│  │  │                               public-data (cached anon reads), cache (tags), media, og, seo, fonts, types
 │  │  ├─ requests.ts                  prepareSnapshot, insertRequest, buildMessage
 │  │  ├─ public-form.ts               loadRequestByToken, branding, signed form images
 │  │  ├─ invites.ts                   issueInvite (hash-only storage), lookupInvite
@@ -263,6 +269,8 @@ preset, message templates, reminder days = 3) and the default **Standard** templ
 | Consent | Level, exact text shown and timestamp stored per submission. Enforced in the database: the `enforce_testimonial_rules` trigger reads consent from the submission and rejects publishing beyond it; withdrawal auto-unpublishes. `consentViolations()` mirrors the rules in the UI. |
 | Submission integrity | Owners can't insert submissions or change answers/consent (column-level grants). |
 | Media references | Testimonial photo/logo must be files in the workspace's folder; proof may also be an http(s) link (trigger). |
+| Public pages | Read only through anon `public_*` functions (explicit public columns, published only, active workspaces). Media streamed only for DB-approved paths. Tested: no private value in any public response or page source. |
+| Shared origin | No owner-supplied HTML/JS on public pages: theme CSS built from validated values; analytics limited to Plausible/GA4 IDs; custom CSS (Phase 4) must be scoped and sanitised. |
 | Right to be forgotten | Deleting a client cascades to projects, requests, submissions, testimonials, notes, activity and removes their files. |
 | Super admin | Server-side check on every request and action; no business data in the panel; no impersonation. |
 | Suspension | Owner read-only (enforced by `can_write` in RLS); request links show "temporarily unavailable". |
@@ -306,6 +314,8 @@ preset, message templates, reminder days = 3) and the default **Standard** templ
 - **Previews** render the real `FormFlow` with `preview` — never build a parallel renderer, or "the preview matches" stops being guaranteed.
 - **Consent rules** live in `public.consent_violation()` (database) and `lib/consent.ts` (UI); change both together.
 - **Keys are permanent**: form item keys and custom field keys/types never change after creation.
+- **Public output**: never query tables for public pages — extend a `public_*` function (explicit columns) and add the new field to the private-data test in `tests/phase3.test.ts`.
+- **Cache**: any owner change that can alter public output must call `revalidateSite(workspaceId)`.
 - **To-one embeds** from PostgREST can arrive as objects or arrays; normalise with `one()` from `lib/utils`.
 - Log owner-visible events with `logActivity`; log platform/security events with `logAudit`.
 - Keep migrations append-only; never edit a migration that has been applied to a shared database.

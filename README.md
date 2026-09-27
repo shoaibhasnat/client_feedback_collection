@@ -1,11 +1,11 @@
-# Testimonial Collector — Phases 1–2 (Collect, Configure)
+# Testimonial Collector — Phases 1–3 (Collect, Configure, Showcase)
 
 A multi-tenant web app where independent businesses collect structured client testimonials,
 keep a lightweight CRM of clients and projects, and review submissions. Built from
-*Testimonial Collector App — Developer Brief* (Sep 27, 2026). This repository covers **Phases 1–2**.
+*Testimonial Collector App — Developer Brief* (Sep 27, 2026). This repository covers **Phases 1–3**.
 
 **Documentation:** [Application guide](docs/APP.md) (architecture, data model, security, conventions) ·
-[Phase 1 — Collect](docs/phases/PHASE-1.md) · [Phase 2 — Configure](docs/phases/PHASE-2.md) (scope, acceptance criteria, verification, handover).
+[Phase 1 — Collect](docs/phases/PHASE-1.md) · [Phase 2 — Configure](docs/phases/PHASE-2.md) · [Phase 3 — Showcase](docs/phases/PHASE-3.md) (scope, acceptance criteria, verification, handover).
 
 **Stack:** Next.js 16 (App Router, TypeScript) · Supabase (Postgres, Auth, Storage, Row Level Security) ·
 Tailwind CSS 4 · Zod · sharp · Vitest.
@@ -33,9 +33,17 @@ Tailwind CSS 4 · Zod · sharp · Vitest.
 | Tags | Create, edit, merge, delete; tag clients and testimonials; filters; bulk publish/hide/private/tag/untag/delete |
 | Consent & integrity | Enforced in Postgres: consent read from the submission, no publishing beyond it, withdrawal unpublishes, owners can't edit submissions, frozen request snapshots, media must be workspace files |
 
-**Deferred to later phases (by design):** public wall, appearance editor, filtered links, collections, SEO
-(Phase 3); video, widget, image cards, client approval flow, CSV import/export, custom CSS, workspace
-deletion with 30-day purge and data export (Phase 4); TOTP two-factor.
+## What's in Phase 3
+
+| Area | Included |
+| --- | --- |
+| Public wall (`/{slug}`) | Themed page: hero with stats and CTA, featured, all testimonials (grid/masonry) with tag chips and search in the URL, about, services, client logos, CTA footer — order and visibility set by the owner |
+| Links | `/{slug}?tag=…`, collections at `/{slug}/c/{collection}` (managed in `/admin/collections`), single testimonials at `/{slug}/t/view/{id}` with Open Graph cards |
+| Appearance editor | Presets, light/dark palettes, curated self-hosted fonts, shape, sections, card fields, all public copy, logos/favicon/share image/form background, SEO, allowlisted analytics, last-10 version history; live preview |
+| Privacy & performance | Public pages read only through anon `public_*` SQL functions (tested: no private data in any output); Lighthouse mobile 94–96 |
+
+**Deferred to later phases (by design):** video, embeddable widget, image cards, client approval flow,
+CSV import/export, custom CSS, workspace deletion with 30-day purge and data export (Phase 4); TOTP two-factor.
 
 ## Local setup
 
