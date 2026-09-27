@@ -1,0 +1,103 @@
+import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { randomToken } from "@/lib/crypto";
+import { env } from "@/lib/env";
+import { buildSnapshot, type ClientRecord, type ProjectRecord } from "@/lib/form/snapshot";
+import type { FormItemRow, TemplateCopy, TemplateSettings } from "@/lib/form/types";
+import { fillTemplate, firstName } from "@/lib/utils";
+
+export function requestUrl(token: string) {
+  return `${env.appUrl}/t/${token}`;
+}
+
+/** Load everything needed to snapshot a template for one client/project (RLS-scoped client). */
+export async function prepareSnapshot(
+  supabase: SupabaseClient,
+  args: { workspaceId: string; clientId: string; projectId: string | null; templateId: string | null },
+) {
+  const templateQuery = supabase.from("form_templates").select("id, name, settings, copy").is("archived_at", null);
+  const [{ data: client }, { data: project }, { data: template }, { data: settings }] = await Promise.all([
+    supabase.from("clients").select("*").eq("id", args.clientId).maybeSingle(),
+    args.projectId
+      ? supabase.from("projects").select("*").eq("id", args.projectId).eq("client_id", args.clientId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    args.templateId
+      ? templateQuery.eq("id", args.templateId).maybeSingle()
+      : templateQuery.eq("is_default", true).maybeSingle(),
+    supabase.from("site_settings").select("profile").eq("workspace_id", args.workspaceId).maybeSingle(),
+  ]);
+
+  if (!client) throw new Error("Client not found.");
+  if (args.projectId && !project) throw new Error("That project doesn't belong to this client.");
+  if (!template) throw new Error("Form template not found.");
+
+  const { data: items } = await supabase.from("form_items").select("*").eq("template_id", template.id);
+  const profile = (settings?.profile ?? {}) as Record<string, string | null>;
+
+  return buildSnapshot({
+    template: {
+      id: template.id,
+      name: template.name,
+      settings: template.settings as Partial<TemplateSettings>,
+      copy: template.copy as TemplateCopy,
+    },
+    items: (items ?? []) as FormItemRow[],
+    client: client as ClientRecord,
+    project: project as ProjectRecord | null,
+    owner: {
+      name: profile.name ?? "",
+      // Stored as a private storage path; the public form signs it at render time.
+      photo_url: profile.photo_url ?? null,
+      tagline: profile.tagline ?? "",
+      share_url: profile.share_url ?? "",
+    },
+  });
+}
+
+export async function insertRequest(
+  supabase: SupabaseClient,
+  args: {
+    workspaceId: string;
+    clientId: string;
+    projectId: string | null;
+    templateId: string | null;
+    personalMessage: string | null;
+    expiresAt: string | null;
+  },
+) {
+  const { snapshot, warnings } = await prepareSnapshot(supabase, args);
+  const { data, error } = await supabase
+    .from("requests")
+    .insert({
+      workspace_id: args.workspaceId,
+      client_id: args.clientId,
+      project_id: args.projectId,
+      template_id: snapshot.template.id,
+      template_snapshot: snapshot,
+      token: randomToken(24),
+      personal_message: args.personalMessage,
+      expires_at: args.expiresAt,
+      status: "draft",
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+  return { id: data.id as string, warnings };
+}
+
+export type MessageKind = "upwork" | "email" | "whatsapp" | "reminder";
+
+export function buildMessage(
+  templates: Record<string, unknown>,
+  kind: MessageKind,
+  vars: { clientName: string; projectName: string | null; link: string; ownerName: string },
+) {
+  const text = typeof templates[kind] === "string" ? (templates[kind] as string) : "{link}";
+  return fillTemplate(text, {
+    client_first_name: firstName(vars.clientName) || "there",
+    client_name: vars.clientName,
+    project_name: vars.projectName ?? "our project",
+    owner_name: vars.ownerName,
+    link: vars.link,
+  });
+}
