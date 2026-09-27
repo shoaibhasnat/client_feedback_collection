@@ -1,11 +1,11 @@
-# Testimonial Collector — Phases 1–4a (Collect, Configure, Showcase, Extras part 1)
+# Testimonial Collector — Phases 1–4 (Collect, Configure, Showcase, Extras)
 
 A multi-tenant web app where independent businesses collect structured client testimonials,
 keep a lightweight CRM of clients and projects, and review submissions. Built from
-*Testimonial Collector App — Developer Brief* (Sep 27, 2026). This repository covers **Phases 1–3 and 4a**.
+*Testimonial Collector App — Developer Brief* (Sep 27, 2026). This repository covers **Phases 1–4**.
 
 **Documentation:** [Application guide](docs/APP.md) (architecture, data model, security, conventions) ·
-[Phase 1 — Collect](docs/phases/PHASE-1.md) · [Phase 2 — Configure](docs/phases/PHASE-2.md) · [Phase 3 — Showcase](docs/phases/PHASE-3.md) · [Phase 4a — Video & approval](docs/phases/PHASE-4A.md) (scope, acceptance criteria, verification, handover).
+[Phase 1 — Collect](docs/phases/PHASE-1.md) · [Phase 2 — Configure](docs/phases/PHASE-2.md) · [Phase 3 — Showcase](docs/phases/PHASE-3.md) · [Phase 4a — Video & approval](docs/phases/PHASE-4A.md) · [Phase 4b — Widget, cards, CSV](docs/phases/PHASE-4B.md) (scope, acceptance criteria, verification, handover).
 
 **Stack:** Next.js 16 (App Router, TypeScript) · Supabase (Postgres, Auth, Storage, Row Level Security) ·
 Tailwind CSS 4 · Zod · sharp · Vitest.
@@ -51,9 +51,17 @@ Tailwind CSS 4 · Zod · sharp · Vitest.
 | Client approval | One-time approval link (`/a/{token}`, hash stored only) for an edited quote; client approves or suggests changes; editing the quote voids the approval; approvals on Home |
 | Reminders | Copying the reminder message records it; "Needs a reminder" filter counts from the last reminder |
 
-**Deferred to later phases (by design):** embeddable widget, image cards, CSV import/export and data export,
-custom CSS (Phase 4b); workspace deletion with 30-day purge, super admin per-workspace export, TOTP two-factor,
-custom head snippet.
+## What's in Phase 4b
+
+| Area | Included |
+| --- | --- |
+| Widget | `/admin/widgets`: grid, carousel, single card, scrolling wall, rating badge; source (all/featured/tag/collection), theme, fields; live preview at 3 widths; script snippet (auto-resizing iframe) or plain iframe; carries the workspace public key |
+| Image cards | PNG export of any testimonial at 1080×1080, 1200×627 and 1080×1920 in 3 designs using the site's colours and fonts; consent enforced |
+| CSV & export | Client CSV export and import (dry-run preview, duplicate and error report); Settings → Data: all tables as JSON + CSV with media links, and a ZIP of all media |
+| Custom CSS | Appearance → Theme: scoped to public pages, validated on save and render |
+
+**Not built yet (unscheduled):** workspace deletion with 30-day purge, super admin per-workspace export, TOTP two-factor,
+custom head snippet, collection-as-PDF (brief "nice-to-have").
 
 ## Local setup
 

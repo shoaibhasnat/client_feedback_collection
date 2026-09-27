@@ -37,7 +37,7 @@ a **super admin** creates workspaces and invites owners.
 | 2 | Configure | Form builder, per-client/per-request form settings, multiple templates, custom fields, full consent enforcement, manual testimonials, tags | ✅ Done — [details](phases/PHASE-2.md) |
 | 3 | Showcase | Public wall, appearance/theme editor, filtered links, collections, single-testimonial pages, SEO | ✅ Done — [details](phases/PHASE-3.md) |
 | 4a | Extras (part 1) | Video record/upload + download, video on the wall, client approval flow, reminders polish | ✅ Done — [details](phases/PHASE-4A.md) |
-| 4b | Extras (part 2) | Embeddable widget, image cards, CSV import/export + data export, custom CSS | Not started |
+| 4b | Extras (part 2) | Embeddable widget, image cards, CSV import/export + data export, custom CSS | ✅ Built — [details](phases/PHASE-4B.md) |
 
 ---
 
