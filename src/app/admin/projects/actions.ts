@@ -9,6 +9,7 @@ import { randomToken } from "@/lib/crypto";
 import { IMAGE_TYPES, processImage, UploadError } from "@/lib/uploads";
 import { nullIfEmpty } from "@/lib/utils";
 import { parseCustomFields, type CustomFieldDef } from "@/lib/custom-fields";
+import { revalidateSite } from "@/lib/site/cache";
 
 async function readCustom(ctx: Awaited<ReturnType<typeof assertWritable>>, formData: FormData, existing: Record<string, unknown> | null) {
   const { data: defs } = await ctx.supabase
@@ -132,6 +133,7 @@ export async function updateProjectAction(projectId: string, _prev: FormState, f
 
   await syncClientDates(ctx.supabase, parsed.data.client_id);
   revalidatePath(`/admin/projects/${projectId}`);
+  revalidateSite(ctx.workspace.id);
   redirect(`/admin/projects/${projectId}`);
 }
 

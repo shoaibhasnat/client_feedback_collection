@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit";
 import { storeImage, UploadError } from "@/lib/uploads";
 import { nullIfEmpty } from "@/lib/utils";
 import { cleanPresets } from "@/lib/form/settings";
+import { revalidateSite } from "@/lib/site/cache";
 
 export type SettingsState = { error?: string; ok?: boolean };
 
@@ -18,6 +19,7 @@ export async function saveProfileAction(_prev: SettingsState, formData: FormData
     .object({
       name: z.string().trim().min(1, "Enter your name.").max(120),
       tagline: z.string().max(200),
+      bio: z.string().max(3000),
       services: z.array(z.string().max(100)).max(30),
       contact_links: z.array(url).max(20),
       share_url: url.nullable(),
@@ -25,6 +27,7 @@ export async function saveProfileAction(_prev: SettingsState, formData: FormData
     .safeParse({
       name: String(formData.get("name") ?? ""),
       tagline: String(formData.get("tagline") ?? "").trim(),
+      bio: String(formData.get("bio") ?? "").trim(),
       services: String(formData.get("services") ?? "").split("\n").map((s) => s.trim()).filter(Boolean),
       contact_links: String(formData.get("contact_links") ?? "").split("\n").map((s) => s.trim()).filter(Boolean),
       share_url: nullIfEmpty(formData.get("share_url")),
@@ -49,6 +52,7 @@ export async function saveProfileAction(_prev: SettingsState, formData: FormData
   if (error) return { error: error.message };
   await ctx.supabase.from("profiles").update({ name: parsed.data.name }).eq("id", ctx.user.id);
   revalidatePath("/admin", "layout");
+  revalidateSite(ctx.workspace.id);
   return { ok: true };
 }
 
@@ -73,6 +77,7 @@ export async function saveMessageTemplatesAction(_prev: SettingsState, formData:
     .eq("workspace_id", ctx.workspace.id);
   if (error) return { error: error.message };
   revalidatePath("/admin", "layout");
+  revalidateSite(ctx.workspace.id);
   return { ok: true };
 }
 

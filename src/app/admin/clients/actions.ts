@@ -9,6 +9,7 @@ import { removeFolder, storeImage, UploadError } from "@/lib/uploads";
 import { nullIfEmpty } from "@/lib/utils";
 import { parseCustomFields, type CustomFieldDef } from "@/lib/custom-fields";
 import { pickTagIds } from "@/lib/tags";
+import { revalidateSite } from "@/lib/site/cache";
 
 type Ctx = Awaited<ReturnType<typeof assertWritable>>;
 
@@ -205,6 +206,7 @@ export async function deleteClientAction(clientId: string) {
   for (const id of submissionIds) await removeFolder(ctx.supabase, `${ctx.workspace.id}/submissions/${id}`);
 
   revalidatePath("/admin", "layout");
+  revalidateSite(ctx.workspace.id);
   redirect("/admin/clients?deleted=1");
 }
 

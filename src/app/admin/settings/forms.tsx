@@ -19,7 +19,7 @@ function Status({ state }: { state: SettingsState }) {
 export function ProfileForm({
   values,
 }: {
-  values: { name: string; tagline: string; services: string; contact_links: string; share_url: string; photo: string | null };
+  values: { name: string; tagline: string; bio: string; services: string; contact_links: string; share_url: string; photo: string | null };
 }) {
   const [state, action] = useActionState<SettingsState, FormData>(saveProfileAction, {});
   return (
@@ -44,6 +44,9 @@ export function ProfileForm({
       </Field>
       <Field label="Tagline" htmlFor="p-tagline" hint="e.g. Shopify developer for fast-growing stores">
         <Input id="p-tagline" name="tagline" defaultValue={values.tagline} maxLength={200} />
+      </Field>
+      <Field label="Bio" htmlFor="p-bio" hint="Shown in the About section of your public page.">
+        <Textarea id="p-bio" name="bio" rows={4} defaultValue={values.bio} maxLength={3000} />
       </Field>
       <Field label="Services" htmlFor="p-services" hint="One per line.">
         <Textarea id="p-services" name="services" rows={3} defaultValue={values.services} />

@@ -8,6 +8,7 @@ import type { FormValues } from "@/lib/form/types";
 import { clientIp, ipHash } from "@/lib/crypto";
 import { rateLimit } from "@/lib/rate-limit";
 import { storeImage, UploadError } from "@/lib/uploads";
+import { revalidateSite } from "@/lib/site/cache";
 
 type Result = { ok: true } | { ok: false; error: string; closed?: boolean; fieldErrors?: Record<string, string> };
 
@@ -171,5 +172,6 @@ export async function submitForm(token: string, input: Partial<FormValues>, hone
     action: "submitted",
     meta: { submission_id: submissionId, consent_level: values.consent_level },
   });
+  revalidateSite(request.workspace_id);
   return { ok: true };
 }

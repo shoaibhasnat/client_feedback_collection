@@ -13,6 +13,7 @@ import { itemSchema } from "@/lib/form/steps";
 import { mappingAllows } from "@/lib/form/catalog";
 import { CLIENT_FIELD_OPTIONS } from "@/lib/form/snapshot";
 import { pickTagIds } from "@/lib/tags";
+import { revalidateSite } from "@/lib/site/cache";
 
 type Ctx = Awaited<ReturnType<typeof assertWritable>>;
 
@@ -154,6 +155,7 @@ export async function saveFromSubmissionAction(submissionId: string, _prev: Edit
     });
   }
   revalidatePath("/admin", "layout");
+  revalidateSite(ctx.workspace.id);
   return { ok: true };
 }
 
@@ -306,6 +308,7 @@ export async function saveManualAction(testimonialId: string | null, _prev: Edit
   }
   if (id) await syncTestimonialTags(ctx, id, formData);
   revalidatePath("/admin/testimonials");
+  revalidateSite(ctx.workspace.id);
   redirect(`/admin/testimonials/${id}?saved=1`);
 }
 
@@ -317,6 +320,7 @@ export async function deleteTestimonialAction(testimonialId: string) {
     await ctx.supabase.storage.from("uploads").remove([t.proof_url]);
   }
   revalidatePath("/admin/testimonials");
+  revalidateSite(ctx.workspace.id);
   redirect(t?.submission_id ? `/admin/testimonials/review/${t.submission_id}` : "/admin/testimonials?view=all");
 }
 
@@ -349,6 +353,8 @@ export async function bulkTestimonialAction(input: { ids: string[]; op: string; 
       await ctx.supabase.from("testimonial_tags").delete().eq("tag_id", tagId).in("testimonial_id", ids);
     }
     revalidatePath("/admin/testimonials");
+    revalidateSite(ctx.workspace.id);
+  revalidateSite(ctx.workspace.id);
     return { ok: true, message: `${op === "tag_add" ? "Tagged" : "Untagged"} ${ids.length} with “${tag.name}”.` };
   }
 
@@ -358,6 +364,8 @@ export async function bulkTestimonialAction(input: { ids: string[]; op: string; 
     const files = (rows ?? []).map((r) => r.proof_url).filter((u): u is string => !!u && u.startsWith(`${ctx.workspace.id}/`));
     if (files.length) await ctx.supabase.storage.from("uploads").remove(files);
     revalidatePath("/admin", "layout");
+    revalidateSite(ctx.workspace.id);
+  revalidateSite(ctx.workspace.id);
     return { ok: true, message: `Deleted ${rows?.length ?? 0}. Original client submissions are kept.` };
   }
 
@@ -381,6 +389,7 @@ export async function bulkTestimonialAction(input: { ids: string[]; op: string; 
     else done += 1;
   }
   revalidatePath("/admin", "layout");
+  revalidateSite(ctx.workspace.id);
   const verb = op === "publish" ? "Published" : op === "hide" ? "Hidden" : "Marked private";
   return {
     ok: blocked.length === 0,

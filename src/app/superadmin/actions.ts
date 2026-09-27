@@ -7,6 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { issueInvite } from "@/lib/invites";
 import { logAudit } from "@/lib/audit";
 import { env } from "@/lib/env";
+import { revalidatePublicWorkspaces } from "@/lib/site/cache";
 
 // Every action re-checks super-admin status on the server (brief 10.4) and only ever
 // touches platform metadata: workspaces, users, invites, settings. Never business data.
@@ -116,6 +117,7 @@ export async function setWorkspaceStatus(workspaceId: string, status: "active" |
     targetType: "workspace",
     targetId: workspaceId,
   });
+  revalidatePublicWorkspaces(workspaceId);
   revalidatePath("/superadmin", "layout");
 }
 
@@ -141,6 +143,7 @@ export async function updateWorkspace(workspaceId: string, _prev: UpdateWorkspac
     targetId: workspaceId,
     meta: { before, after: parsed.data },
   });
+  revalidatePublicWorkspaces(workspaceId);
   revalidatePath("/superadmin", "layout");
   return { ok: true };
 }

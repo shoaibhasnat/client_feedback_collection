@@ -7,6 +7,12 @@ const nextConfig: NextConfig = {
     proxyClientMaxBodySize: "18mb",
   },
   poweredByHeader: false,
+  images: {
+    // Public media is served resized in modern formats (brief §8).
+    formats: ["image/avif", "image/webp"],
+    // Media route URLs are versioned; keep optimized copies briefly so unpublishing takes effect quickly.
+    minimumCacheTTL: 300,
+  },
   async headers() {
     return [
       {

@@ -22,6 +22,7 @@ export default async function SettingsPage() {
             values={{
               name: (profile.name as string) ?? "",
               tagline: (profile.tagline as string) ?? "",
+              bio: (profile.bio as string) ?? "",
               services: ((profile.services as string[]) ?? []).join("\n"),
               contact_links: ((profile.contact_links as string[]) ?? []).join("\n"),
               share_url: (profile.share_url as string) ?? "",

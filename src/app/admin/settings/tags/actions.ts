@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { assertWritable } from "@/lib/auth";
 import { TAG_COLORS } from "@/lib/tags";
+import { revalidateSite } from "@/lib/site/cache";
 
 export type TagResult = { ok: boolean; error?: string };
 
@@ -13,8 +14,9 @@ const tagSchema = z.object({
   color: z.enum(TAG_COLORS),
 });
 
-function refresh() {
+function refresh(workspaceId: string) {
   revalidatePath("/admin", "layout");
+  revalidateSite(workspaceId);
 }
 
 const duplicate = (code?: string) => (code === "23505" ? "A tag with that name already exists." : undefined);
@@ -25,7 +27,7 @@ export async function createTagAction(input: unknown): Promise<TagResult> {
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
   const { error } = await ctx.supabase.from("tags").insert({ ...parsed.data, workspace_id: ctx.workspace.id });
   if (error) return { ok: false, error: duplicate(error.code) ?? error.message };
-  refresh();
+  refresh(ctx.workspace.id);
   return { ok: true };
 }
 
@@ -35,7 +37,7 @@ export async function updateTagAction(id: string, input: unknown): Promise<TagRe
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
   const { error } = await ctx.supabase.from("tags").update(parsed.data).eq("id", id);
   if (error) return { ok: false, error: duplicate(error.code) ?? error.message };
-  refresh();
+  refresh(ctx.workspace.id);
   return { ok: true };
 }
 
@@ -67,7 +69,7 @@ export async function mergeTagsAction(sourceId: string, targetId: string): Promi
   // Deleting the source cascades its remaining assignment rows.
   const { error } = await ctx.supabase.from("tags").delete().eq("id", sourceId);
   if (error) return { ok: false, error: error.message };
-  refresh();
+  refresh(ctx.workspace.id);
   return { ok: true };
 }
 
@@ -75,6 +77,6 @@ export async function deleteTagAction(id: string): Promise<TagResult> {
   const ctx = await assertWritable();
   const { error } = await ctx.supabase.from("tags").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
-  refresh();
+  refresh(ctx.workspace.id);
   return { ok: true };
 }
