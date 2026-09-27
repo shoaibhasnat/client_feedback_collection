@@ -20,6 +20,7 @@ export function buildSteps(snapshot: TemplateSnapshot): Step[] {
   const steps: Step[] = [{ kind: "welcome" }];
   if (snapshot.settings.rating_enabled) steps.push({ kind: "rating" });
   questions.forEach((item, index) => steps.push({ kind: "question", item, index, total: questions.length }));
+  if (snapshot.settings.video_enabled) steps.push({ kind: "video" });
   if (about.length) steps.push({ kind: "about", items: about });
   if (contact.length) steps.push({ kind: "contact", items: contact });
   // A hidden consent step means the answer is fixed to "private" (brief §3.7).
@@ -41,6 +42,8 @@ export function estimateMinutes(snapshot: TemplateSnapshot): number {
         return total + 8 * step.items.length;
       case "consent":
         return total + 20;
+      case "video":
+        return total + Math.min(snapshot.settings.video_max_seconds ?? 90, 120) + 30;
       default:
         return total;
     }
@@ -132,6 +135,8 @@ export function validateStep(step: Step, values: FormValues, snapshot: TemplateS
       return {};
     case "question":
       return validateItems([step.item], values.answers);
+    case "video":
+      return snapshot.settings.video_required && !values.video_path ? { video: "Please record or upload a short video." } : {};
     case "about":
       return validateItems(step.items, values.about);
     case "contact":

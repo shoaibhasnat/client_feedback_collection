@@ -45,7 +45,7 @@ export async function storeImage(
   workspaceId: string,
   folder: string,
   file: File,
-  opts: { square?: boolean } = {},
+  opts: { square?: boolean; maxSize?: number } = {},
 ): Promise<string> {
   const data = await processImage(file, opts);
   const path = `${workspaceId}/${folder}/${randomToken(9)}.webp`;

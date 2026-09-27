@@ -4,7 +4,7 @@ import { Lock } from "lucide-react";
 import { CLIENT_FIELD_LABELS, PROJECT_FIELD_LABELS } from "@/lib/form/catalog";
 import { NO_PREFILL_TYPES, resolveSettings } from "@/lib/form/settings";
 import type { FormItemRow, ItemSettings, PrefillSource } from "@/lib/form/types";
-import { CONSENT_KEY, RATING_KEY } from "@/lib/form/types";
+import { CONSENT_KEY, RATING_KEY, VIDEO_KEY } from "@/lib/form/types";
 import { cn } from "@/lib/utils";
 
 export type GridRow = Pick<FormItemRow, "key" | "label" | "section" | "type" | "options" | "maps_to_client_field">;
@@ -52,6 +52,7 @@ export function ItemSettingsGrid({
       title: "Steps",
       rows: [
         { key: RATING_KEY, label: "Star rating", section: "step" },
+        { key: VIDEO_KEY, label: "Video", section: "step" },
         { key: CONSENT_KEY, label: "Consent", section: "step" },
       ],
     },

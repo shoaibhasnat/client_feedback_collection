@@ -119,6 +119,10 @@ export async function archiveTemplateAction(templateId: string, archived: boolea
 const settingsSchema = z.object({
   rating_enabled: z.boolean(),
   rating_required: z.boolean(),
+  video_enabled: z.boolean(),
+  video_required: z.boolean(),
+  video_max_seconds: z.number().int().min(15, "Allow at least 15 seconds.").max(300, "Videos can be at most 5 minutes."),
+  video_max_mb: z.number().int().min(5).max(100, "The storage limit is 100 MB per video."),
   consent_options: z.array(z.enum(CONSENT_LEVELS as [string, ...string[]])).min(1, "Offer at least one consent option."),
   cta: z.object({
     type: z.enum(["none", "share", "link"]),
@@ -138,6 +142,7 @@ export async function saveTemplateSettingsAction(templateId: string, input: unkn
     ...((t?.settings ?? {}) as Record<string, unknown>),
     ...parsed.data,
     rating_required: parsed.data.rating_enabled && parsed.data.rating_required,
+    video_required: parsed.data.video_enabled && parsed.data.video_required,
     // Keep consent options in a stable order.
     consent_options: CONSENT_LEVELS.filter((l) => parsed.data.consent_options.includes(l)),
   };

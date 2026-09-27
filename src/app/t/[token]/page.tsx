@@ -63,7 +63,7 @@ export default async function TestimonialFormPage({ params }: PageProps<"/t/[tok
   // Resume a saved draft if there is one.
   const { data: draft } = await admin
     .from("submissions")
-    .select("id, rating, answers, about, contact, consent_level, progress_step")
+    .select("id, rating, answers, about, contact, consent_level, progress_step, video_url")
     .eq("request_id", request.id)
     .maybeSingle();
 
@@ -95,6 +95,15 @@ export default async function TestimonialFormPage({ params }: PageProps<"/t/[tok
     imagePaths,
   );
 
+  // Resume an uploaded video (only a file in this submission's own folder).
+  let initialVideo: { path: string; url: string | null } | null = null;
+  const videoPath = draft?.video_url;
+  if (snapshot.settings.video_enabled && videoPath && videoPath.startsWith(`${request.workspace_id}/submissions/${draft!.id}/`)) {
+    const { data: signed } = await admin.storage.from("uploads").createSignedUrl(videoPath, 3600);
+    initialVideo = { path: videoPath, url: signed?.signedUrl ?? null };
+    values = { ...values, video_path: videoPath };
+  }
+
   const branding = await loadFormBranding(request.workspace_id, snapshot.owner.photo_url);
   const steps = buildSteps(snapshot);
   const startStep = draft ? Math.min(draft.progress_step, steps.length - 1) : 0;
@@ -106,6 +115,7 @@ export default async function TestimonialFormPage({ params }: PageProps<"/t/[tok
       initialValues={values}
       initialStep={startStep}
       initialImageUrls={imageUrls}
+      initialVideo={initialVideo}
       personalMessage={request.personal_message}
       ownerPhotoUrl={branding.ownerPhotoUrl}
       shareUrl={branding.shareUrl}

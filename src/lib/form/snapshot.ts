@@ -7,7 +7,7 @@ import type {
   TemplateSettings,
   TemplateSnapshot,
 } from "@/lib/form/types";
-import { CONSENT_KEY, RATING_KEY } from "@/lib/form/types";
+import { CONSENT_KEY, RATING_KEY, VIDEO_KEY } from "@/lib/form/types";
 import { baselineSettings, cleanOverrideMap, NO_PREFILL_TYPES, resolveSettings } from "@/lib/form/settings";
 import { firstName } from "@/lib/utils";
 
@@ -77,7 +77,9 @@ const DEFAULT_SETTINGS: TemplateSettings = {
   rating_enabled: true,
   rating_required: false,
   video_enabled: false,
+  video_required: false,
   video_max_seconds: 90,
+  video_max_mb: 100,
   consent_options: ["full", "partial", "anonymous", "private"],
   cta: { type: "none", label: "", url: "" },
 };
@@ -153,6 +155,7 @@ export function buildSnapshot(args: {
 
   const rating = resolved[RATING_KEY];
   const consent = resolved[CONSENT_KEY];
+  const video = resolved[VIDEO_KEY];
 
   return {
     snapshot: {
@@ -163,7 +166,10 @@ export function buildSnapshot(args: {
         ...args.template.settings,
         rating_enabled: rating.shown,
         rating_required: rating.shown && rating.required,
-        video_enabled: false,
+        video_enabled: video.shown,
+        video_required: video.shown && video.required,
+        video_max_seconds: Math.min(Math.max(Number(args.template.settings.video_max_seconds) || 90, 15), 300),
+        video_max_mb: Math.min(Math.max(Number(args.template.settings.video_max_mb) || 100, 5), 100),
         // Hiding the consent step is only allowed as "Private" (brief §3.7).
         consent_forced: consent.shown ? null : "private",
       },

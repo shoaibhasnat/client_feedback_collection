@@ -56,6 +56,8 @@ export function describeScreens(snapshot: TemplateSnapshot): string[] {
           return `About you (${s.items.length} fields)`;
         case "contact":
           return `Contact details (${s.items.length} fields, private)`;
+        case "video":
+          return `Video (${snapshot.settings.video_required ? "required" : "optional"}, up to ${snapshot.settings.video_max_seconds}s)`;
         case "consent":
           return "Consent";
       }

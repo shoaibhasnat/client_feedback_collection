@@ -695,6 +695,12 @@ function SettingsEditor({
   const s = template.settings;
   const [ratingEnabled, setRatingEnabled] = useState(s.rating_enabled ?? true);
   const [ratingRequired, setRatingRequired] = useState(s.rating_required ?? false);
+  const [video, setVideo] = useState({
+    enabled: s.video_enabled ?? false,
+    required: s.video_required ?? false,
+    seconds: s.video_max_seconds ?? 90,
+    mb: s.video_max_mb ?? 100,
+  });
   const [consent, setConsent] = useState<ConsentLevel[]>(s.consent_options ?? [...CONSENT_LEVELS]);
   const [cta, setCta] = useState(s.cta ?? { type: "none" as const, label: "", url: "" });
 
@@ -722,7 +728,28 @@ function SettingsEditor({
 
         <fieldset className="space-y-2">
           <legend className="text-sm font-medium text-slate-900">Video step</legend>
-          <p className="text-sm text-slate-500">Video recording and upload arrive in a later phase.</p>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" className="size-4" disabled={readOnly} checked={video.enabled} onChange={(e) => setVideo({ ...video, enabled: e.target.checked })} />
+            Ask for a short video (record in the browser or upload)
+          </label>
+          <label className="flex items-center gap-2 pl-6 text-sm">
+            <input
+              type="checkbox"
+              className="size-4"
+              disabled={!video.enabled || readOnly}
+              checked={video.enabled && video.required}
+              onChange={(e) => setVideo({ ...video, required: e.target.checked })}
+            />
+            Required
+          </label>
+          <div className="grid max-w-md grid-cols-2 gap-3 pl-6">
+            <Field label="Max length (seconds)" htmlFor="video-seconds">
+              <Input id="video-seconds" type="number" min={15} max={300} disabled={!video.enabled || readOnly} value={video.seconds} onChange={(e) => setVideo({ ...video, seconds: Number(e.target.value) })} />
+            </Field>
+            <Field label="Max file size (MB)" htmlFor="video-mb">
+              <Input id="video-mb" type="number" min={5} max={100} disabled={!video.enabled || readOnly} value={video.mb} onChange={(e) => setVideo({ ...video, mb: Number(e.target.value) })} />
+            </Field>
+          </div>
         </fieldset>
 
         <fieldset className="space-y-2">
@@ -778,6 +805,10 @@ function SettingsEditor({
                   saveTemplateSettingsAction(template.id, {
                     rating_enabled: ratingEnabled,
                     rating_required: ratingRequired,
+                    video_enabled: video.enabled,
+                    video_required: video.required,
+                    video_max_seconds: video.seconds,
+                    video_max_mb: video.mb,
                     consent_options: consent,
                     cta,
                   }),

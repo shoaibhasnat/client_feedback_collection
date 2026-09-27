@@ -67,6 +67,7 @@ export type OverrideMap = Record<string, ItemOverride>;
 
 export const RATING_KEY = "__rating";
 export const CONSENT_KEY = "__consent";
+export const VIDEO_KEY = "__video";
 
 /** An item frozen into a request's template snapshot, with settings already resolved. */
 export type SnapshotItem = {
@@ -89,7 +90,10 @@ export type TemplateSettings = {
   rating_enabled: boolean;
   rating_required?: boolean;
   video_enabled: boolean;
+  video_required?: boolean;
   video_max_seconds: number;
+  /** Maximum upload size in MB (brief §3.4 default 100). */
+  video_max_mb?: number;
   consent_options: ConsentLevel[];
   cta: { type: "none" | "share" | "link"; label: string; url: string };
 };
@@ -135,12 +139,15 @@ export type FormValues = {
   contact: Record<string, AnswerValue>;
   consent_level: ConsentLevel | null;
   consent_confirmed: boolean;
+  /** Storage path of the uploaded video (set by the server after upload; client value is only a hint). */
+  video_path?: string | null;
 };
 
 export type Step =
   | { kind: "welcome" }
   | { kind: "rating" }
   | { kind: "question"; item: SnapshotItem; index: number; total: number }
+  | { kind: "video" }
   | { kind: "about"; items: SnapshotItem[] }
   | { kind: "contact"; items: SnapshotItem[] }
   | { kind: "consent" };

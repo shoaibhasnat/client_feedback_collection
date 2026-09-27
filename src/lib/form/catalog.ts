@@ -77,6 +77,7 @@ export const COPY_FIELDS: { key: string; label: string; long?: boolean; group: s
   { group: "Welcome", key: "welcome_text", label: "Welcome text", long: true },
   { group: "Welcome", key: "start_button", label: "Start button" },
   { group: "Steps", key: "rating_title", label: "Rating question" },
+  { group: "Steps", key: "video_title", label: "Video step title" },
   { group: "Steps", key: "about_title", label: "About you title" },
   { group: "Steps", key: "contact_title", label: "Contact title" },
   { group: "Steps", key: "next_button", label: "Next button" },

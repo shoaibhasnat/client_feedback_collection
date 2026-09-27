@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { loadRequestByToken, type LoadedRequest } from "@/lib/public-form";
 import { consentText, sanitizeValues, validateAll } from "@/lib/form/steps";
 import type { FormValues } from "@/lib/form/types";
-import { clientIp, ipHash } from "@/lib/crypto";
+import { clientIp, ipHash, randomToken } from "@/lib/crypto";
 import { rateLimit } from "@/lib/rate-limit";
 import { storeImage, UploadError } from "@/lib/uploads";
 import { revalidateSite } from "@/lib/site/cache";
@@ -126,6 +126,10 @@ export async function submitForm(token: string, input: Partial<FormValues>, hone
   // Bots fill the hidden field. Pretend it worked and store nothing.
   if (honeypot) return { ok: true };
 
+  // The video (if any) is whatever the server recorded after upload — never the browser's claim.
+  const { data: current } = await createAdminClient().from("submissions").select("video_url").eq("id", submissionId).single();
+  values.video_path = snapshot.settings.video_enabled ? (current?.video_url ?? null) : null;
+
   const errors = validateAll(values, snapshot);
   if (Object.keys(errors).length) {
     return { ok: false, error: "Some answers need attention.", fieldErrors: errors };
@@ -173,5 +177,107 @@ export async function submitForm(token: string, input: Partial<FormValues>, hone
     meta: { submission_id: submissionId, consent_level: values.consent_level },
   });
   revalidateSite(request.workspace_id);
+  return { ok: true };
+}
+
+// ---------- Video (brief §3.4) --------------------------------------------
+
+const VIDEO_TYPES: Record<string, string> = { "video/webm": "webm", "video/mp4": "mp4", "video/quicktime": "mov" };
+
+function videoFolder(request: LoadedRequest, submissionId: string) {
+  return `${request.workspace_id}/submissions/${submissionId}`;
+}
+
+export type VideoUploadStart = { ok: true; url: string; path: string } | { ok: false; error: string };
+
+/**
+ * Issue a one-time signed upload URL for this submission's video. The browser uploads straight to
+ * storage (with progress) so large files never pass through the app server.
+ */
+export async function startVideoUpload(token: string, input: { size: number; type: string; duration: number | null }): Promise<VideoUploadStart> {
+  const request = await openRequest(token, "video", 10);
+  if ("ok" in request) return { ok: false, error: request.ok ? "Upload failed." : request.error };
+  const s = request.template_snapshot.settings;
+  if (!s.video_enabled) return { ok: false, error: "This form doesn't accept video." };
+
+  const type = String(input.type).split(";")[0].trim().toLowerCase();
+  const ext = VIDEO_TYPES[type];
+  if (!ext) return { ok: false, error: "Upload an MP4, MOV or WebM video." };
+  const maxBytes = (s.video_max_mb ?? 100) * 1024 * 1024;
+  if (!Number.isFinite(input.size) || input.size <= 0 || input.size > maxBytes) {
+    return { ok: false, error: `Videos must be ${s.video_max_mb ?? 100} MB or smaller.` };
+  }
+  const maxSeconds = s.video_max_seconds ?? 90;
+  if (input.duration !== null && Number.isFinite(input.duration) && input.duration > maxSeconds + 2) {
+    return { ok: false, error: `Videos can be up to ${maxSeconds} seconds long.` };
+  }
+
+  const submissionId = await ensureSubmission(request);
+  const path = `${videoFolder(request, submissionId)}/video-${randomToken(9)}.${ext}`;
+  const { data, error } = await createAdminClient().storage.from("uploads").createSignedUploadUrl(path);
+  if (error || !data) return { ok: false, error: "Couldn't start the upload. Try again." };
+  return { ok: true, url: data.signedUrl, path };
+}
+
+export type VideoFinish = { ok: true; url: string | null } | { ok: false; error: string };
+
+/** Verify the uploaded object and attach it (plus a thumbnail frame) to the submission. */
+export async function finishVideoUpload(token: string, path: string, formData: FormData): Promise<VideoFinish> {
+  const request = await openRequest(token, "video", 20);
+  if ("ok" in request) return { ok: false, error: request.ok ? "Upload failed." : request.error };
+  if (!request.template_snapshot.settings.video_enabled) return { ok: false, error: "This form doesn't accept video." };
+
+  const submissionId = await ensureSubmission(request);
+  const folder = videoFolder(request, submissionId);
+  const name = path.slice(folder.length + 1);
+  if (!path.startsWith(`${folder}/video-`) || name.includes("/")) return { ok: false, error: "Unknown upload." };
+
+  const admin = createAdminClient();
+  const { data: files } = await admin.storage.from("uploads").list(folder, { search: name, limit: 5 });
+  const object = files?.find((f) => f.name === name);
+  const size = Number((object?.metadata as { size?: number } | undefined)?.size ?? 0);
+  const mime = String((object?.metadata as { mimetype?: string } | undefined)?.mimetype ?? "");
+  const maxBytes = (request.template_snapshot.settings.video_max_mb ?? 100) * 1024 * 1024;
+  if (!object || size <= 0 || size > maxBytes || !mime.startsWith("video/")) {
+    if (object) await admin.storage.from("uploads").remove([path]);
+    return { ok: false, error: "The upload didn't complete. Please try again." };
+  }
+
+  // Optional thumbnail frame captured in the browser; re-encoded (and EXIF-free) like every image.
+  let thumbPath: string | null = null;
+  const thumb = formData.get("thumbnail");
+  if (thumb instanceof File && thumb.size > 0) {
+    try {
+      thumbPath = await storeImage(admin, request.workspace_id, `submissions/${submissionId}`, thumb, { maxSize: 640 });
+    } catch (e) {
+      if (!(e instanceof UploadError)) throw e;
+    }
+  }
+
+  const { data: previous } = await admin.from("submissions").select("video_url, video_thumbnail_url").eq("id", submissionId).single();
+  const { error } = await admin
+    .from("submissions")
+    .update({ video_url: path, video_thumbnail_url: thumbPath })
+    .eq("id", submissionId)
+    .is("submitted_at", null);
+  if (error) return { ok: false, error: "Couldn't save the video. Try again." };
+
+  const stale = [previous?.video_url, previous?.video_thumbnail_url].filter((p): p is string => !!p && p.startsWith(`${folder}/`) && p !== path);
+  if (stale.length) await admin.storage.from("uploads").remove(stale);
+
+  const { data: signed } = await admin.storage.from("uploads").createSignedUrl(path, 3600);
+  return { ok: true, url: signed?.signedUrl ?? null };
+}
+
+export async function removeVideo(token: string): Promise<{ ok: boolean }> {
+  const request = await openRequest(token, "video", 20);
+  if ("ok" in request) return { ok: false };
+  const admin = createAdminClient();
+  const { data: sub } = await admin.from("submissions").select("id, video_url, video_thumbnail_url").eq("request_id", request.id).maybeSingle();
+  if (!sub) return { ok: true };
+  await admin.from("submissions").update({ video_url: null, video_thumbnail_url: null }).eq("id", sub.id).is("submitted_at", null);
+  const folder = videoFolder(request, sub.id);
+  const files = [sub.video_url, sub.video_thumbnail_url].filter((p): p is string => !!p && p.startsWith(`${folder}/`));
+  if (files.length) await admin.storage.from("uploads").remove(files);
   return { ok: true };
 }

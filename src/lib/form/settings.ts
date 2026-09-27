@@ -8,7 +8,7 @@ import type {
   PrefillSource,
   TemplateSettings,
 } from "@/lib/form/types";
-import { CONSENT_KEY, RATING_KEY } from "@/lib/form/types";
+import { CONSENT_KEY, RATING_KEY, VIDEO_KEY } from "@/lib/form/types";
 
 // Per-item settings (brief §3.7). Shared by the dashboard (browser) and the server.
 // Precedence: request override → client default → template default.
@@ -33,6 +33,17 @@ export function ratingDefaults(settings: Partial<TemplateSettings>): ItemSetting
   return {
     shown: settings.rating_enabled ?? true,
     required: settings.rating_required ?? false,
+    prefill_source: "none",
+    prefill_field: null,
+    prefill_value: null,
+    prefill_locked: false,
+  };
+}
+
+export function videoDefaults(settings: Partial<TemplateSettings>): ItemSettings {
+  return {
+    shown: settings.video_enabled ?? false,
+    required: settings.video_required ?? false,
     prefill_source: "none",
     prefill_field: null,
     prefill_value: null,
@@ -73,7 +84,7 @@ export function cleanOverrideMap(raw: unknown): OverrideMap {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const out: OverrideMap = {};
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (!/^(__rating|__consent|[a-z][a-z0-9_]{0,62})$/.test(key)) continue;
+    if (!/^(__rating|__consent|__video|[a-z][a-z0-9_]{0,62})$/.test(key)) continue;
     const clean = cleanOverride(value);
     if (Object.keys(clean).length) out[key] = clean;
   }
@@ -108,6 +119,7 @@ export function baselineSettings(
   for (const row of rows) out[row.key] = resolveSettings(templateDefaults(row), clientDefaults[row.key]);
   out[RATING_KEY] = resolveSettings(ratingDefaults(templateSettings), clientDefaults[RATING_KEY]);
   out[CONSENT_KEY] = resolveSettings(CONSENT_DEFAULTS, clientDefaults[CONSENT_KEY]);
+  out[VIDEO_KEY] = resolveSettings(videoDefaults(templateSettings), clientDefaults[VIDEO_KEY]);
   return out;
 }
 

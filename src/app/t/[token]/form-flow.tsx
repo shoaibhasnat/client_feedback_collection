@@ -7,7 +7,28 @@ import type { AnswerValue, ConsentLevel, FormValues, SnapshotItem, Step, Templat
 import type { PublicTheme } from "@/lib/public-form";
 import { cn } from "@/lib/utils";
 import { fontStack } from "@/lib/site/fonts";
-import { saveProgress, submitForm, uploadFormImage } from "./actions";
+import { finishVideoUpload, removeVideo, saveProgress, startVideoUpload, submitForm, uploadFormImage } from "./actions";
+import { VideoStep, type VideoUploadState } from "./video-step";
+
+/** PUT the file to the signed storage URL with progress events (fetch has no upload progress). */
+function putWithProgress(url: string, body: Blob, type: string, onProgress: (pct: number) => void): Promise<boolean> {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("content-type", type);
+    xhr.setRequestHeader("x-upsert", "false");
+    xhr.setRequestHeader("cache-control", "max-age=3600");
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (anon) xhr.setRequestHeader("apikey", anon);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress(Math.min(99, Math.round((e.loaded / e.total) * 100)));
+    };
+    xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300);
+    xhr.onerror = () => resolve(false);
+    xhr.onabort = () => resolve(false);
+    xhr.send(body);
+  });
+}
 
 type Props = {
   token: string;
@@ -15,6 +36,8 @@ type Props = {
   initialValues: FormValues;
   initialStep: number;
   initialImageUrls: Record<string, string>;
+  /** Already-uploaded video when resuming (signed URL for playback). */
+  initialVideo?: { path: string; url: string | null } | null;
   personalMessage: string | null;
   ownerPhotoUrl: string | null;
   shareUrl: string | null;
@@ -33,6 +56,54 @@ export function FormFlow(props: Props) {
   const [values, setValues] = useState<FormValues>(props.initialValues);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [imageUrls, setImageUrls] = useState(props.initialImageUrls);
+  const [video, setVideo] = useState<{ path: string | null; url: string | null }>({
+    path: props.initialVideo?.path ?? null,
+    url: props.initialVideo?.url ?? null,
+  });
+  const [videoUpload, setVideoUpload] = useState<VideoUploadState>({ status: "idle", progress: 0 });
+  const uploadRef = useRef<Promise<boolean> | null>(null);
+
+  // Background upload: start → PUT to storage with progress → server verifies and attaches.
+  const uploadVideo = (blob: Blob, type: string, duration: number | null, thumbnail: Blob | null) => {
+    const localUrl = URL.createObjectURL(blob);
+    const task = (async () => {
+      setVideoUpload({ status: "uploading", progress: 0 });
+      const start = await startVideoUpload(token, { size: blob.size, type, duration });
+      if (!start.ok) {
+        setVideoUpload({ status: "error", progress: 0, error: start.error });
+        return false;
+      }
+      const ok = await putWithProgress(start.url, blob, type, (progress) => setVideoUpload({ status: "uploading", progress }));
+      if (!ok) {
+        setVideoUpload({ status: "error", progress: 0, error: "The upload was interrupted. Check your connection and try again." });
+        return false;
+      }
+      const fd = new FormData();
+      if (thumbnail) fd.append("thumbnail", new File([thumbnail], "thumbnail.jpg", { type: "image/jpeg" }));
+      const fin = await finishVideoUpload(token, start.path, fd);
+      if (!fin.ok) {
+        setVideoUpload({ status: "error", progress: 0, error: fin.error });
+        return false;
+      }
+      setVideo({ path: start.path, url: fin.url ?? localUrl });
+      setValues((v) => ({ ...v, video_path: start.path }));
+      setErrors((e) => {
+        const rest = { ...e };
+        delete rest.video;
+        return rest;
+      });
+      setVideoUpload({ status: "done", progress: 100 });
+      return true;
+    })();
+    uploadRef.current = task;
+  };
+
+  const discardVideo = () => {
+    setVideo({ path: null, url: null });
+    setValues((v) => ({ ...v, video_path: null }));
+    setVideoUpload({ status: "idle", progress: 0 });
+    void removeVideo(token);
+  };
   const [status, setStatus] = useState<"idle" | "saving" | "done" | "closed">("idle");
   const [banner, setBanner] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -118,6 +189,15 @@ export function FormFlow(props: Props) {
     }
     setStatus("saving");
     startTransition(async () => {
+      // A video still uploading in the background must finish before we submit.
+      if (uploadRef.current && videoUpload.status === "uploading") {
+        const ok = await uploadRef.current;
+        if (!ok) {
+          setStatus("idle");
+          setBanner("Your video didn't finish uploading. Go back to the video step to try again, or remove it.");
+          return;
+        }
+      }
       const res = await submitForm(token, values, honeypot.current?.value ?? "");
       if (res.ok) {
         setStatus("done");
@@ -172,6 +252,7 @@ export function FormFlow(props: Props) {
           <p className="px-4 pt-2 text-right text-xs text-[var(--tc-muted)]" aria-live="polite">
             Step {stepIndex} of {steps.length - 1}
             {pending && " · saving…"}
+            {videoUpload.status === "uploading" && ` · uploading video ${videoUpload.progress}%`}
           </p>
         </div>
       )}
@@ -230,6 +311,11 @@ export function FormFlow(props: Props) {
                 personalMessage={props.personalMessage}
                 ownerPhotoUrl={props.ownerPhotoUrl}
                 minutes={props.minutes}
+                preview={props.preview}
+                video={video}
+                videoUpload={videoUpload}
+                onVideo={uploadVideo}
+                onRemoveVideo={discardVideo}
               />
             </div>
 
@@ -275,6 +361,7 @@ export function FormFlow(props: Props) {
 
 function isSkippable(step: Step, snapshot: TemplateSnapshot) {
   if (step.kind === "rating") return !snapshot.settings.rating_required;
+  if (step.kind === "video") return !snapshot.settings.video_required;
   return step.kind === "question" && !step.item.required;
 }
 
@@ -294,6 +381,11 @@ type StepViewProps = {
   personalMessage: string | null;
   ownerPhotoUrl: string | null;
   minutes: number;
+  preview?: boolean;
+  video: { path: string | null; url: string | null };
+  videoUpload: VideoUploadState;
+  onVideo: (blob: Blob, type: string, duration: number | null, thumbnail: Blob | null) => void;
+  onRemoveVideo: () => void;
 };
 
 const headingClass = "text-2xl font-semibold leading-snug outline-none sm:text-3xl";
@@ -398,6 +490,24 @@ function StepView({ headingRef, ...p }: StepViewProps) {
         </div>
       );
     }
+
+    case "video":
+      return (
+        <VideoStep
+          headingRef={headingRef}
+          title={p.copy("video_title", "Would you record a short video?")}
+          prompts={snapshot.items.filter((i) => i.section === "question" && i.shown).map((i) => renderText(snapshot, i.label))}
+          maxSeconds={snapshot.settings.video_max_seconds ?? 90}
+          maxMb={snapshot.settings.video_max_mb ?? 100}
+          required={Boolean(snapshot.settings.video_required)}
+          preview={p.preview}
+          current={{ url: p.video.url, hasVideo: Boolean(p.video.path) }}
+          upload={p.videoUpload}
+          onVideo={p.onVideo}
+          onRemove={p.onRemoveVideo}
+          error={p.errors.video}
+        />
+      );
 
     case "consent":
       return <ConsentStep {...p} headingRef={headingRef} />;
