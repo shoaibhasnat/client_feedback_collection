@@ -102,7 +102,7 @@ describe("public API (anon, SECURITY DEFINER functions)", () => {
     const rows = data as Record<string, unknown>[];
     expect(rows.map((r) => r.id).sort()).toEqual([publishedTagged, publishedUntagged].sort());
     expect(Object.keys(rows[0]).sort()).toEqual(
-      ["company", "date", "featured", "has_logo", "has_photo", "headline", "id", "name", "platform", "quote", "rating", "role", "sort_order", "tag_ids", "version"].sort(),
+      ["company", "date", "featured", "has_logo", "has_photo", "has_video", "has_video_thumb", "headline", "id", "name", "platform", "quote", "rating", "role", "sort_order", "tag_ids", "version"].sort(),
     );
     expect(rows.find((r) => r.id === publishedTagged)?.has_photo).toBe(true);
   });
