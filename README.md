@@ -4,6 +4,9 @@ A multi-tenant web app where independent businesses collect structured client te
 keep a lightweight CRM of clients and projects, and review submissions. Built from
 *Testimonial Collector App — Developer Brief* (Sep 27, 2026). This repository covers **Phase 1**.
 
+**Documentation:** [Application guide](docs/APP.md) (architecture, data model, security, conventions) ·
+[Phase 1 — Collect](docs/phases/PHASE-1.md) (scope, acceptance criteria, verification, handover).
+
 **Stack:** Next.js 16 (App Router, TypeScript) · Supabase (Postgres, Auth, Storage, Row Level Security) ·
 Tailwind CSS 4 · Zod · sharp · Vitest.
 
