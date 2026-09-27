@@ -10,6 +10,7 @@ const TABS = [
   { href: "/admin/settings/messages", label: "Messages & presets" },
   { href: "/admin/settings/fields", label: "Custom fields" },
   { href: "/admin/settings/tags", label: "Tags" },
+  { href: "/admin/settings/data", label: "Data" },
 ];
 
 export function SettingsTabs() {

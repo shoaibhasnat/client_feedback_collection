@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Alert, Badge, Button, EmptyState, Input, LinkButton, PageHeader, Select, Table, Td, Th } from "@/components/ui";
+import { Alert, Badge, Button, buttonClass, EmptyState, Input, LinkButton, PageHeader, Select, Table, Td, Th } from "@/components/ui";
 import { requireOwner } from "@/lib/auth";
 import { CLIENT_SOURCES, CLIENT_STATUSES, labelOf } from "@/lib/constants";
 import { formatDate } from "@/lib/utils";
@@ -53,7 +53,21 @@ export default async function ClientsPage({ searchParams }: PageProps<"/admin/cl
       <PageHeader
         title="Clients"
         description="Everyone you've worked with, whether or not they've left a testimonial."
-        actions={!readOnly && <LinkButton href="/admin/clients/new">Add client</LinkButton>}
+        actions={
+          <>
+            <a href="/admin/clients/export" className={buttonClass("outline", "md")} download>
+              Export CSV
+            </a>
+            {!readOnly && (
+              <>
+                <LinkButton href="/admin/clients/import" variant="outline">
+                  Import CSV
+                </LinkButton>
+                <LinkButton href="/admin/clients/new">Add client</LinkButton>
+              </>
+            )}
+          </>
+        }
       />
       {sp.deleted === "1" && (
         <Alert tone="green" className="mb-4">

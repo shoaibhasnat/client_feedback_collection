@@ -5,6 +5,7 @@ import { requireOwner } from "@/lib/auth";
 import { signPaths } from "@/lib/uploads";
 import { deleteTestimonialAction, saveManualAction } from "../actions";
 import { ManualTestimonialForm } from "../manual-form";
+import { ImageCardPanel } from "../image-card-panel";
 import type { Tag } from "@/lib/tags";
 
 export default async function EditTestimonialPage({ params, searchParams }: PageProps<"/admin/testimonials/[id]">) {
@@ -39,6 +40,11 @@ export default async function EditTestimonialPage({ params, searchParams }: Page
         selectedTags={((t.testimonial_tags ?? []) as { tag_id: string }[]).map((x) => x.tag_id)}
         initial={t}
       />
+      {t.display_quote && (
+        <div className="mt-6 max-w-2xl">
+          <ImageCardPanel testimonialId={id} version={String(t.updated_at)} />
+        </div>
+      )}
       {!readOnly && (
         <form action={deleteTestimonialAction.bind(null, id)} className="mt-6">
           <ConfirmSubmit message="Delete this testimonial?">Delete testimonial</ConfirmSubmit>

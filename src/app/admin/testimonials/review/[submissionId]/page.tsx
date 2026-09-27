@@ -13,6 +13,7 @@ import { ReviewWorkspace, type EditorValues, type RawAnswer } from "../../testim
 import type { Tag } from "@/lib/tags";
 import { isVerbatimQuote, videoDownloadName } from "@/lib/approval";
 import { ApprovalCard } from "../../approval-card";
+import { ImageCardPanel } from "../../image-card-panel";
 
 export default async function ReviewSubmissionPage({ params }: PageProps<"/admin/testimonials/review/[submissionId]">) {
   const { submissionId } = await params;
@@ -154,6 +155,7 @@ export default async function ReviewSubmissionPage({ params }: PageProps<"/admin
           edited={!isVerbatimQuote(testimonial?.display_quote, answers.map((a) => a.value))}
           readOnly={readOnly}
         />
+        {testimonial?.display_quote && <ImageCardPanel testimonialId={testimonial.id} version={String(testimonial.updated_at)} />}
         <Card id="merge">
           <CardHeader
             title="Update client profile?"
