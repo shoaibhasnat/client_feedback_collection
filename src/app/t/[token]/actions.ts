@@ -9,6 +9,7 @@ import { clientIp, ipHash, randomToken } from "@/lib/crypto";
 import { rateLimit } from "@/lib/rate-limit";
 import { storeImage, UploadError } from "@/lib/uploads";
 import { revalidateSite } from "@/lib/site/cache";
+import { VIDEO_STORAGE_MAX_MB } from "@/lib/video-limits";
 
 type Result = { ok: true } | { ok: false; error: string; closed?: boolean; fieldErrors?: Record<string, string> };
 
@@ -203,9 +204,9 @@ export async function startVideoUpload(token: string, input: { size: number; typ
   const type = String(input.type).split(";")[0].trim().toLowerCase();
   const ext = VIDEO_TYPES[type];
   if (!ext) return { ok: false, error: "Upload an MP4, MOV or WebM video." };
-  const maxBytes = (s.video_max_mb ?? 100) * 1024 * 1024;
+  const maxBytes = Math.min(s.video_max_mb ?? VIDEO_STORAGE_MAX_MB, VIDEO_STORAGE_MAX_MB) * 1024 * 1024;
   if (!Number.isFinite(input.size) || input.size <= 0 || input.size > maxBytes) {
-    return { ok: false, error: `Videos must be ${s.video_max_mb ?? 100} MB or smaller.` };
+    return { ok: false, error: `Videos must be ${maxBytes / 1024 / 1024} MB or smaller.` };
   }
   const maxSeconds = s.video_max_seconds ?? 90;
   if (input.duration !== null && Number.isFinite(input.duration) && input.duration > maxSeconds + 2) {
@@ -237,7 +238,7 @@ export async function finishVideoUpload(token: string, path: string, formData: F
   const object = files?.find((f) => f.name === name);
   const size = Number((object?.metadata as { size?: number } | undefined)?.size ?? 0);
   const mime = String((object?.metadata as { mimetype?: string } | undefined)?.mimetype ?? "");
-  const maxBytes = (request.template_snapshot.settings.video_max_mb ?? 100) * 1024 * 1024;
+  const maxBytes = Math.min(request.template_snapshot.settings.video_max_mb ?? VIDEO_STORAGE_MAX_MB, VIDEO_STORAGE_MAX_MB) * 1024 * 1024;
   if (!object || size <= 0 || size > maxBytes || !mime.startsWith("video/")) {
     if (object) await admin.storage.from("uploads").remove([path]);
     return { ok: false, error: "The upload didn't complete. Please try again." };

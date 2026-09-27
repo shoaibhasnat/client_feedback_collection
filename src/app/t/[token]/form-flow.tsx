@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { fontStack } from "@/lib/site/fonts";
 import { finishVideoUpload, removeVideo, saveProgress, startVideoUpload, submitForm, uploadFormImage } from "./actions";
 import { VideoStep, type VideoUploadState } from "./video-step";
+import { VIDEO_STORAGE_MAX_MB } from "@/lib/video-limits";
 
 /** PUT the file to the signed storage URL with progress events (fetch has no upload progress). */
 function putWithProgress(url: string, body: Blob, type: string, onProgress: (pct: number) => void): Promise<boolean> {
@@ -498,7 +499,7 @@ function StepView({ headingRef, ...p }: StepViewProps) {
           title={p.copy("video_title", "Would you record a short video?")}
           prompts={snapshot.items.filter((i) => i.section === "question" && i.shown).map((i) => renderText(snapshot, i.label))}
           maxSeconds={snapshot.settings.video_max_seconds ?? 90}
-          maxMb={snapshot.settings.video_max_mb ?? 100}
+          maxMb={Math.min(snapshot.settings.video_max_mb ?? VIDEO_STORAGE_MAX_MB, VIDEO_STORAGE_MAX_MB)}
           required={Boolean(snapshot.settings.video_required)}
           preview={p.preview}
           current={{ url: p.video.url, hasVideo: Boolean(p.video.path) }}

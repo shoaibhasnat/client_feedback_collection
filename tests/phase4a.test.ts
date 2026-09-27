@@ -42,6 +42,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Remove the videos and thumbnails this suite uploaded (destroyTenant only knows its own fixture file).
+  const folder = `${A.workspaceId}/submissions/${A.ids.submissions}`;
+  const { data: files } = await admin.storage.from("uploads").list(folder, { limit: 100 });
+  if (files?.length) await admin.storage.from("uploads").remove(files.map((f) => `${folder}/${f.name}`));
   await destroyTenant(A);
   await destroyTenant(B);
   await cleanupRun();
@@ -137,7 +141,7 @@ describe("video step in the form engine", () => {
 
   it("adds a video step after the questions", () => {
     const kinds = buildSteps(snapshot).map((s) => s.kind);
-    expect(kinds.indexOf("video")).toBeGreaterThan(kinds.indexOf("questions"));
+    expect(kinds.indexOf("video")).toBeGreaterThan(kinds.indexOf("question"));
   });
 
   it("requires a video when the template says so", () => {
@@ -257,5 +261,23 @@ describe("public video media route (HTTP)", () => {
     if (!serverUp) skip();
     const res = await fetch(`${appUrl}/api/public/media/${A.ids.testimonials}/1/contact`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe("video size limit (free plan: 50 MB)", () => {
+  it("defaults to the free-plan limit", async () => {
+    const { VIDEO_STORAGE_MAX_MB } = await import("@/lib/video-limits");
+    expect(VIDEO_STORAGE_MAX_MB).toBe(Number(process.env.NEXT_PUBLIC_VIDEO_MAX_MB) || 50);
+  });
+
+  it("picks a bitrate so a full-length recording fits under the limit", async () => {
+    const { recordingBitrate } = await import("@/lib/video-limits");
+    for (const [mb, secs] of [[50, 90], [50, 300], [20, 300], [100, 90]] as const) {
+      const bps = recordingBitrate(mb, secs);
+      const bytes = ((bps + 96_000) * secs) / 8;
+      expect(bytes).toBeLessThan(mb * 1024 * 1024);
+      expect(bps).toBeLessThanOrEqual(2_000_000);
+    }
+    expect(recordingBitrate(50, 90)).toBe(2_000_000);
   });
 });

@@ -42,6 +42,7 @@ import {
   type ActionResult,
   type ItemInput,
 } from "../actions";
+import { VIDEO_STORAGE_MAX_MB } from "@/lib/video-limits";
 
 type CustomField = { key: string; label: string };
 type Tab = ItemSection | "settings" | "copy";
@@ -699,7 +700,7 @@ function SettingsEditor({
     enabled: s.video_enabled ?? false,
     required: s.video_required ?? false,
     seconds: s.video_max_seconds ?? 90,
-    mb: s.video_max_mb ?? 100,
+    mb: Math.min(s.video_max_mb ?? VIDEO_STORAGE_MAX_MB, VIDEO_STORAGE_MAX_MB),
   });
   const [consent, setConsent] = useState<ConsentLevel[]>(s.consent_options ?? [...CONSENT_LEVELS]);
   const [cta, setCta] = useState(s.cta ?? { type: "none" as const, label: "", url: "" });
@@ -747,7 +748,7 @@ function SettingsEditor({
               <Input id="video-seconds" type="number" min={15} max={300} disabled={!video.enabled || readOnly} value={video.seconds} onChange={(e) => setVideo({ ...video, seconds: Number(e.target.value) })} />
             </Field>
             <Field label="Max file size (MB)" htmlFor="video-mb">
-              <Input id="video-mb" type="number" min={5} max={100} disabled={!video.enabled || readOnly} value={video.mb} onChange={(e) => setVideo({ ...video, mb: Number(e.target.value) })} />
+              <Input id="video-mb" type="number" min={5} max={VIDEO_STORAGE_MAX_MB} disabled={!video.enabled || readOnly} value={video.mb} onChange={(e) => setVideo({ ...video, mb: Number(e.target.value) })} />
             </Field>
           </div>
         </fieldset>

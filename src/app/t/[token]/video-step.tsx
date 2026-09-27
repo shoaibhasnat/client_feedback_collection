@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Camera, RotateCcw, Trash2, Upload, Video } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { recordingBitrate } from "@/lib/video-limits";
 
 // In-browser video recording and upload (brief §3.4). The parent (FormFlow) owns the upload so it can
 // continue in the background while the client moves on to the next steps.
@@ -173,8 +174,8 @@ export function VideoStep({
 
   const begin = (stream: MediaStream) => {
     const mimeType = pickMimeType();
-    // ~2 Mbps keeps a 90-second 720p clip around 25 MB (brief §10.7).
-    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_000_000, audioBitsPerSecond: 96_000 });
+    // Bitrate is chosen so a full-length recording always fits under the upload limit.
+    const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: recordingBitrate(maxMb, maxSeconds), audioBitsPerSecond: 96_000 });
     const chunks: Blob[] = [];
     recorder.ondataavailable = (e) => {
       if (e.data.size) chunks.push(e.data);

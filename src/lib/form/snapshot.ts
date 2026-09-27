@@ -10,6 +10,7 @@ import type {
 import { CONSENT_KEY, RATING_KEY, VIDEO_KEY } from "@/lib/form/types";
 import { baselineSettings, cleanOverrideMap, NO_PREFILL_TYPES, resolveSettings } from "@/lib/form/settings";
 import { firstName } from "@/lib/utils";
+import { VIDEO_STORAGE_MAX_MB } from "@/lib/video-limits";
 
 export type ClientRecord = Record<string, unknown> & {
   name: string;
@@ -79,7 +80,7 @@ const DEFAULT_SETTINGS: TemplateSettings = {
   video_enabled: false,
   video_required: false,
   video_max_seconds: 90,
-  video_max_mb: 100,
+  video_max_mb: VIDEO_STORAGE_MAX_MB,
   consent_options: ["full", "partial", "anonymous", "private"],
   cta: { type: "none", label: "", url: "" },
 };
@@ -169,7 +170,7 @@ export function buildSnapshot(args: {
         video_enabled: video.shown,
         video_required: video.shown && video.required,
         video_max_seconds: Math.min(Math.max(Number(args.template.settings.video_max_seconds) || 90, 15), 300),
-        video_max_mb: Math.min(Math.max(Number(args.template.settings.video_max_mb) || 100, 5), 100),
+        video_max_mb: Math.min(Math.max(Number(args.template.settings.video_max_mb) || VIDEO_STORAGE_MAX_MB, 5), VIDEO_STORAGE_MAX_MB),
         // Hiding the consent step is only allowed as "Private" (brief §3.7).
         consent_forced: consent.shown ? null : "private",
       },

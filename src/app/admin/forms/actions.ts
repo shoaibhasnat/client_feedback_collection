@@ -9,6 +9,7 @@ import { NO_PREFILL_TYPES } from "@/lib/form/settings";
 import { CLIENT_FIELD_OPTIONS, PROJECT_FIELD_OPTIONS } from "@/lib/form/snapshot";
 import type { ItemType } from "@/lib/form/types";
 import { CHOICE_TYPES, CONSENT_LEVELS } from "@/lib/form/types";
+import { VIDEO_STORAGE_MAX_MB } from "@/lib/video-limits";
 
 export type ActionResult = { ok: true; id?: string } | { ok: false; error: string; field?: string };
 
@@ -122,7 +123,7 @@ const settingsSchema = z.object({
   video_enabled: z.boolean(),
   video_required: z.boolean(),
   video_max_seconds: z.number().int().min(15, "Allow at least 15 seconds.").max(300, "Videos can be at most 5 minutes."),
-  video_max_mb: z.number().int().min(5).max(100, "The storage limit is 100 MB per video."),
+  video_max_mb: z.number().int().min(5).max(VIDEO_STORAGE_MAX_MB, `The storage limit is ${VIDEO_STORAGE_MAX_MB} MB per video.`),
   consent_options: z.array(z.enum(CONSENT_LEVELS as [string, ...string[]])).min(1, "Offer at least one consent option."),
   cta: z.object({
     type: z.enum(["none", "share", "link"]),

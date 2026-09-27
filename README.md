@@ -78,6 +78,20 @@ Sign in as the super admin, create a workspace, open the invite link in a privat
 and set the owner's password. Local auth emails (password reset) land in Mailpit at
 http://127.0.0.1:54324.
 
+### Using Supabase Cloud instead of Docker
+
+```bash
+npx supabase login
+npx supabase link --project-ref YOUR_PROJECT_REF      # prompts for the database password
+npx supabase db push --linked                          # applies supabase/migrations
+npx supabase config push                               # auth: sign-up off, 8-char passwords, redirect URLs; storage limit
+```
+
+Then set `.env.local` to the project URL and keys (Dashboard → Project Settings → API), pick a new random
+`IP_HASH_SALT`, and run `npm run seed:admin`. `config push` shows a diff first: review it, because the local
+`config.toml` also holds development-only values. On the free plan the storage limit is 50 MB
+(migration `20261001000001` sets the bucket to match).
+
 ### Environment variables
 
 | Variable | Where | Purpose |
@@ -87,6 +101,7 @@ http://127.0.0.1:54324.
 | `SUPABASE_SERVICE_ROLE_KEY` | **server only** | Invite acceptance, token-scoped public form, super-admin metadata, audit log |
 | `NEXT_PUBLIC_APP_URL` | server | Base URL used in request and invite links |
 | `IP_HASH_SALT` | server | Salt for hashing IPs in the audit log and submissions |
+| `NEXT_PUBLIC_VIDEO_MAX_MB` | client + server | Largest video upload (default 50, the Supabase free-plan cap; 100 on a paid plan) |
 | `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` | seed script only | Super admin bootstrap |
 
 ## Tests
