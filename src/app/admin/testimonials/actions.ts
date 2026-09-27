@@ -8,7 +8,9 @@ import { logActivity } from "@/lib/audit";
 import { consentViolations } from "@/lib/consent";
 import type { ConsentLevel, TemplateSnapshot } from "@/lib/form/types";
 import { storeImage, UploadError } from "@/lib/uploads";
-import { nullIfEmpty } from "@/lib/utils";
+import { firstName, nullIfEmpty } from "@/lib/utils";
+import { randomToken, sha256 } from "@/lib/crypto";
+import { env } from "@/lib/env";
 import { itemSchema } from "@/lib/form/steps";
 import { mappingAllows } from "@/lib/form/catalog";
 import { CLIENT_FIELD_OPTIONS } from "@/lib/form/snapshot";
@@ -51,6 +53,7 @@ const editorSchema = z.object({
   featured: z.boolean(),
   use_photo: z.boolean(),
   use_logo: z.boolean(),
+  use_video: z.boolean(),
 });
 
 function readEditor(formData: FormData) {
@@ -67,6 +70,7 @@ function readEditor(formData: FormData) {
     featured: formData.get("featured") === "on",
     use_photo: formData.get("use_photo") === "on",
     use_logo: formData.get("use_logo") === "on",
+    use_video: formData.get("use_video") === "on",
   });
 }
 
@@ -81,7 +85,7 @@ export async function saveFromSubmissionAction(submissionId: string, _prev: Edit
 
   const { data: sub } = await ctx.supabase
     .from("submissions")
-    .select("id, request_id, about, consent_level, submitted_at, requests(id, client_id, project_id, template_snapshot)")
+    .select("id, request_id, about, consent_level, submitted_at, video_url, video_thumbnail_url, requests(id, client_id, project_id, template_snapshot)")
     .eq("id", submissionId)
     .single();
   if (!sub?.submitted_at) return { error: "This submission isn't complete yet." };
@@ -93,6 +97,25 @@ export async function saveFromSubmissionAction(submissionId: string, _prev: Edit
     const v = item ? (sub.about as Record<string, unknown>)[item.key] : null;
     return typeof v === "string" && v ? v : null;
   };
+
+  const { data: existing } = await ctx.supabase
+    .from("testimonials")
+    .select("id, visibility, published_at, video_thumbnail_url, approval_status, approval_quote")
+    .eq("submission_id", submissionId)
+    .maybeSingle();
+
+  // Video: the client's own recording; the thumbnail is theirs unless the owner uploads a better frame.
+  const useVideo = f.use_video && Boolean(sub.video_url);
+  let thumbnail: string | null = useVideo ? (existing?.video_thumbnail_url ?? sub.video_thumbnail_url ?? null) : null;
+  const thumbFile = formData.get("video_thumbnail");
+  if (useVideo && thumbFile instanceof File && thumbFile.size > 0) {
+    try {
+      thumbnail = await storeImage(ctx.supabase, ctx.workspace.id, "testimonials/thumbnails", thumbFile, { maxSize: 1280 });
+    } catch (e) {
+      if (e instanceof UploadError) return { error: e.message, fieldErrors: { video_thumbnail_url: e.message } };
+      throw e;
+    }
+  }
 
   const display = {
     display_quote: f.display_quote,
@@ -106,6 +129,8 @@ export async function saveFromSubmissionAction(submissionId: string, _prev: Edit
     featured: f.featured,
     photo_url: f.use_photo ? imageFor("photo_url") : null,
     logo_url: f.use_logo ? imageFor("logo_url") : null,
+    video_url: useVideo ? sub.video_url : null,
+    video_thumbnail_url: thumbnail,
   };
 
   if (f.visibility === "published" && !f.display_quote) {
@@ -116,13 +141,17 @@ export async function saveFromSubmissionAction(submissionId: string, _prev: Edit
     return { error: "This goes beyond what the client agreed to show.", fieldErrors: violations };
   }
 
-  const { data: existing } = await ctx.supabase.from("testimonials").select("id, visibility, published_at").eq("submission_id", submissionId).maybeSingle();
+  // An approval covers one exact wording. Editing the quote afterwards voids it.
+  const approvalReset =
+    existing && existing.approval_status !== "not_needed" && (existing.approval_quote ?? "") !== (f.display_quote ?? "")
+      ? { approval_status: "not_needed" as const, approval_token_hash: null, approval_quote: null, approval_requested_at: null }
+      : {};
   const now = new Date().toISOString();
   const publishedAt = f.visibility === "published" ? (existing?.published_at ?? now) : null;
 
   let testimonialId = existing?.id ?? null;
   if (existing) {
-    const { error } = await ctx.supabase.from("testimonials").update({ ...display, published_at: publishedAt }).eq("id", existing.id);
+    const { error } = await ctx.supabase.from("testimonials").update({ ...display, ...approvalReset, published_at: publishedAt }).eq("id", existing.id);
     if (error) return { error: friendlyError(error.message) };
   } else {
     const { data: inserted, error } = await ctx.supabase.from("testimonials").insert({
@@ -139,6 +168,12 @@ export async function saveFromSubmissionAction(submissionId: string, _prev: Edit
     testimonialId = inserted.id;
   }
   if (testimonialId) await syncTestimonialTags(ctx, testimonialId, formData);
+
+  // Replaced custom thumbnails are removed (the client's own thumbnail stays with the submission).
+  const oldThumb = existing?.video_thumbnail_url;
+  if (oldThumb && oldThumb !== thumbnail && oldThumb !== sub.video_thumbnail_url && oldThumb.startsWith(`${ctx.workspace.id}/testimonials/`)) {
+    await ctx.supabase.storage.from("uploads").remove([oldThumb]);
+  }
 
   await ctx.supabase
     .from("requests")
@@ -395,4 +430,63 @@ export async function bulkTestimonialAction(input: { ids: string[]; op: string; 
     ok: blocked.length === 0,
     message: `${verb} ${done}.${blocked.length ? ` ${blocked.length} skipped: ${[...new Set(blocked)].join("; ")}` : ""}`,
   };
+}
+
+// ---------- Client approval of an edited quote (brief §4.4) ----------
+
+export type ApprovalState = { error?: string; link?: string; message?: string };
+
+/**
+ * Create a one-time approval link for the current display quote. Only the token's hash is
+ * stored, so the link is shown to the owner once; asking again replaces the old link.
+ */
+export async function requestApprovalAction(testimonialId: string): Promise<ApprovalState> {
+  const ctx = await assertWritable();
+  const { data: t } = await ctx.supabase
+    .from("testimonials")
+    .select("id, display_quote, submission_id, client_id, clients(name)")
+    .eq("id", testimonialId)
+    .single();
+  if (!t?.submission_id) return { error: "Only testimonials from a client's form can be sent for approval." };
+  if (!t.display_quote?.trim()) return { error: "Write and save a display quote first." };
+
+  const token = randomToken(24);
+  const { error } = await ctx.supabase
+    .from("testimonials")
+    .update({
+      approval_status: "pending",
+      approval_token_hash: sha256(token),
+      approval_quote: t.display_quote,
+      approval_requested_at: new Date().toISOString(),
+      approval_responded_at: null,
+      approval_comment: null,
+    })
+    .eq("id", testimonialId);
+  if (error) return { error: friendlyError(error.message) };
+
+  await logActivity(ctx.supabase, {
+    workspaceId: ctx.workspace.id,
+    clientId: t.client_id,
+    entityType: "testimonial",
+    entityId: testimonialId,
+    action: "approval_requested",
+  });
+
+  const link = `${env.appUrl}/a/${token}`;
+  const clientName = (t.clients as unknown as { name: string } | null)?.name ?? "";
+  const message =
+    `Hi ${firstName(clientName) || "there"}, thanks again for your kind words! ` +
+    `I tidied your feedback into a short quote for my website. Could you check it's OK? ` +
+    `You can approve it or suggest changes here: ${link}`;
+  revalidatePath("/admin", "layout");
+  return { link, message };
+}
+
+export async function cancelApprovalAction(testimonialId: string) {
+  const ctx = await assertWritable();
+  await ctx.supabase
+    .from("testimonials")
+    .update({ approval_status: "not_needed", approval_token_hash: null, approval_quote: null, approval_requested_at: null })
+    .eq("id", testimonialId);
+  revalidatePath("/admin", "layout");
 }

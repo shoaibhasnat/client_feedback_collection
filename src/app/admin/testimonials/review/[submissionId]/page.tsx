@@ -11,6 +11,8 @@ import { firstName, formatDate } from "@/lib/utils";
 import { deleteTestimonialAction, dismissMergeAction, mergeIntoClientAction, saveFromSubmissionAction } from "../../actions";
 import { ReviewWorkspace, type EditorValues, type RawAnswer } from "../../testimonial-editor";
 import type { Tag } from "@/lib/tags";
+import { isVerbatimQuote, videoDownloadName } from "@/lib/approval";
+import { ApprovalCard } from "../../approval-card";
 
 export default async function ReviewSubmissionPage({ params }: PageProps<"/admin/testimonials/review/[submissionId]">) {
   const { submissionId } = await params;
@@ -66,12 +68,27 @@ export default async function ReviewSubmissionPage({ params }: PageProps<"/admin
 
   const sign = await signPaths(supabase, [photoPath, logoPath, ...mergeRows.filter((r) => r.item.type === "image").flatMap((r) => [r.submitted, r.current])]);
 
+  // The client's video: a playable URL plus a separate one that downloads with a readable filename.
+  const videoPath = sub.video_url as string | null;
+  let video = null;
+  if (videoPath) {
+    const bucket = supabase.storage.from("uploads");
+    const thumbPath = (testimonial?.video_thumbnail_url as string | null) ?? (sub.video_thumbnail_url as string | null);
+    const [play, download, thumb] = await Promise.all([
+      bucket.createSignedUrl(videoPath, 3600),
+      bucket.createSignedUrl(videoPath, 3600, { download: videoDownloadName(client.name, sub.submitted_at, videoPath) }),
+      thumbPath ? bucket.createSignedUrl(thumbPath, 3600) : Promise.resolve({ data: null }),
+    ]);
+    video = { url: play.data?.signedUrl ?? null, downloadUrl: download.data?.signedUrl ?? null, thumbUrl: thumb.data?.signedUrl ?? null };
+  }
+
   const fullName = asText(about.full_name) || client.name;
   const initial: EditorValues = testimonial
     ? {
         ...testimonial,
         use_photo: Boolean(testimonial.photo_url),
         use_logo: Boolean(testimonial.logo_url),
+        use_video: Boolean(testimonial.video_url),
       }
     : {
         display_quote: "",
@@ -86,6 +103,7 @@ export default async function ReviewSubmissionPage({ params }: PageProps<"/admin
         featured: false,
         use_photo: consent === "full" && Boolean(photoPath),
         use_logo: consent === "full" && Boolean(logoPath),
+        use_video: false,
       };
 
   return (
@@ -119,7 +137,23 @@ export default async function ReviewSubmissionPage({ params }: PageProps<"/admin
         logoUrl={sign(logoPath)}
         tags={(tags ?? []) as Tag[]}
         selectedTags={selectedTags}
+        video={video}
       >
+        <ApprovalCard
+          testimonialId={testimonial?.id ?? null}
+          approval={
+            testimonial
+              ? {
+                  status: testimonial.approval_status,
+                  requestedAt: testimonial.approval_requested_at,
+                  respondedAt: testimonial.approval_responded_at,
+                  comment: testimonial.approval_comment,
+                }
+              : null
+          }
+          edited={!isVerbatimQuote(testimonial?.display_quote, answers.map((a) => a.value))}
+          readOnly={readOnly}
+        />
         <Card id="merge">
           <CardHeader
             title="Update client profile?"

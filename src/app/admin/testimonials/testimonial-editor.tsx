@@ -30,7 +30,11 @@ export type EditorValues = {
   featured: boolean;
   use_photo?: boolean;
   use_logo?: boolean;
+  use_video?: boolean;
 };
+
+/** The client's recorded video, as the owner sees it on the review page (signed, short-lived URLs). */
+export type ReviewVideo = { url: string | null; downloadUrl: string | null; thumbUrl: string | null };
 
 export type RawAnswer = { key: string; label: string; value: string };
 
@@ -55,6 +59,7 @@ export function ReviewWorkspace({
   children,
   tags = [],
   selectedTags = [],
+  video = null,
 }: {
   answers: RawAnswer[];
   initial: EditorValues;
@@ -66,6 +71,7 @@ export function ReviewWorkspace({
   children?: React.ReactNode;
   tags?: Tag[];
   selectedTags?: string[];
+  video?: ReviewVideo | null;
 }) {
   const [quote, setQuote] = useState(initial.display_quote ?? "");
   const quoteRef = useRef<HTMLTextAreaElement>(null);
@@ -118,6 +124,7 @@ export function ReviewWorkspace({
           logoUrl={logoUrl}
           tags={tags}
           selectedTags={selectedTags}
+          video={video}
         />
       </div>
     </div>
@@ -137,6 +144,7 @@ export function EditorForm({
   extra,
   tags = [],
   selectedTags = [],
+  video = null,
 }: {
   action: (prev: EditorState, fd: FormData) => Promise<EditorState>;
   initial: EditorValues;
@@ -150,6 +158,7 @@ export function EditorForm({
   extra?: React.ReactNode;
   tags?: Tag[];
   selectedTags?: string[];
+  video?: ReviewVideo | null;
 }) {
   const [state, formAction] = useActionState<EditorState, FormData>(action, {});
   const fe = state.fieldErrors ?? {};
@@ -259,6 +268,8 @@ export function EditorForm({
             </div>
           )}
 
+          {video && <VideoPanel video={video} consentLevel={consentLevel} initial={initial.use_video ?? false} error={fe.video_url ?? fe.video_thumbnail_url} />}
+
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="featured" defaultChecked={initial.featured} className="size-4" /> Featured
           </label>
@@ -300,6 +311,64 @@ function ImageToggle({
         {label}
       </label>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+/** Player, download, and "show on the wall" toggle for the client's video. Download stays in the dashboard. */
+function VideoPanel({
+  video,
+  consentLevel,
+  initial,
+  error,
+}: {
+  video: ReviewVideo;
+  consentLevel?: string | null;
+  initial: boolean;
+  error?: string;
+}) {
+  const canShow = consentLevel === "full";
+  return (
+    <div className="space-y-3 rounded-lg border border-slate-200 p-3">
+      <p className="text-sm font-medium text-slate-900">Video</p>
+      {video.url ? (
+        <video
+          src={video.url}
+          poster={video.thumbUrl ?? undefined}
+          controls
+          playsInline
+          preload="metadata"
+          className="aspect-video w-full rounded-md bg-slate-900"
+        />
+      ) : (
+        <p className="text-sm text-slate-500">The video file couldn&rsquo;t be loaded.</p>
+      )}
+      <div className="flex flex-wrap items-center gap-3">
+        {video.downloadUrl && (
+          <a
+            href={video.downloadUrl}
+            className="inline-flex h-8 items-center rounded-md border border-slate-300 px-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Download video
+          </a>
+        )}
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" name="use_video" defaultChecked={canShow && initial} disabled={!canShow} className="size-4" />
+          {canShow ? "Show video on the wall" : "Video needs Full consent to be shown"}
+        </label>
+      </div>
+      {canShow && (
+        <Field label="Custom thumbnail" htmlFor="video_thumbnail" hint="Optional. JPG, PNG or WebP. Replaces the frame captured from the recording.">
+          <input
+            id="video_thumbnail"
+            name="video_thumbnail"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="block text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm"
+          />
+        </Field>
+      )}
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }

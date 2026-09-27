@@ -18,7 +18,7 @@ function anon() {
   });
 }
 
-const RESERVED = new Set(["admin", "superadmin", "login", "invite", "t", "api", "auth", "forgot-password", "reset-password", "_next"]);
+const RESERVED = new Set(["admin", "superadmin", "login", "invite", "t", "a", "api", "auth", "forgot-password", "reset-password", "_next"]);
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,48}[a-z0-9])?$/;
 
 export type PublicWorkspace = { id: string; name: string; slug: string; status: "active" | "suspended" };

@@ -13,7 +13,7 @@ import { revalidatePublicWorkspaces } from "@/lib/site/cache";
 // touches platform metadata: workspaces, users, invites, settings. Never business data.
 
 const RESERVED_SLUGS = new Set([
-  "admin", "superadmin", "login", "logout", "invite", "t", "c", "api", "auth", "forgot-password",
+  "admin", "superadmin", "login", "logout", "invite", "t", "a", "c", "api", "auth", "forgot-password",
   "reset-password", "love", "static", "_next", "public", "settings", "app", "www",
 ]);
 

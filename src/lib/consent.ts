@@ -6,6 +6,7 @@ export type DisplayFields = {
   display_company: string | null;
   photo_url: string | null;
   logo_url: string | null;
+  video_url?: string | null;
   visibility: "published" | "hidden" | "private";
 };
 
@@ -21,6 +22,7 @@ export function consentViolations(level: ConsentLevel | null, f: DisplayFields):
       errors.visibility = "The client chose Private: this testimonial can't be published.";
       break;
     case "anonymous":
+      if (f.video_url) errors.video_url = "Anonymous: a video shows the client, so it can't be published.";
       if (f.display_name) errors.display_name = "Anonymous: remove the name.";
       if (f.display_company) errors.display_company = "Anonymous: remove the company name. Describe it in the role instead, e.g. “Founder, e-commerce brand”.";
       if (f.photo_url) errors.photo_url = "Anonymous: no photo.";
@@ -30,6 +32,7 @@ export function consentViolations(level: ConsentLevel | null, f: DisplayFields):
       if (f.display_name && f.display_name.trim().includes(" ")) errors.display_name = "Partial: first name only.";
       if (f.display_role && f.display_company) errors.display_company = "Partial: show the company or the job title, not both.";
       if (f.photo_url) errors.photo_url = "Partial: no photo.";
+      if (f.video_url) errors.video_url = "Partial: a video shows the client, so it needs Full consent.";
       break;
   }
   return errors;
