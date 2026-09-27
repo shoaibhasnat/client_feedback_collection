@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/admin/settings", label: "Profile & account" },
+  { href: "/admin/settings/appearance", label: "Appearance" },
   { href: "/admin/settings/messages", label: "Messages & presets" },
   { href: "/admin/settings/fields", label: "Custom fields" },
   { href: "/admin/settings/tags", label: "Tags" },

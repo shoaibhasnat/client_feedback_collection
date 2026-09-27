@@ -18,16 +18,25 @@ export async function processImage(file: File, opts: { square?: boolean; maxSize
   if (file.size > MAX_IMAGE_BYTES) throw new UploadError("Images must be 8 MB or smaller.");
 
   const input = Buffer.from(await file.arrayBuffer());
-  const meta = await sharp(input).metadata().catch(() => null);
+  // limitInputPixels guards against decompression bombs (tiny files that decode to huge images).
+  const meta = await sharp(input, { limitInputPixels: 50_000_000 }).metadata().catch(() => null);
   if (!meta?.format || !["jpeg", "png", "webp", "gif"].includes(meta.format)) {
     throw new UploadError("That file isn't a valid image.");
   }
 
+  if ((meta.width ?? 0) * (meta.height ?? 0) > 50_000_000) {
+    throw new UploadError("That image is too large (over 50 megapixels).");
+  }
+
   const size = opts.maxSize ?? 800;
-  const pipeline = sharp(input, { animated: false }).rotate();
+  const pipeline = sharp(input, { animated: false, limitInputPixels: 50_000_000 }).rotate();
   if (opts.square) pipeline.resize(size, size, { fit: "cover", position: "attention" });
   else pipeline.resize(size * 2, size * 2, { fit: "inside", withoutEnlargement: true });
-  return pipeline.webp({ quality: 82 }).toBuffer();
+  try {
+    return await pipeline.webp({ quality: 82 }).toBuffer();
+  } catch {
+    throw new UploadError("That image couldn't be processed. Try a different file.");
+  }
 }
 
 /** Store a processed image under {workspaceId}/{folder}/… and return its storage path. */

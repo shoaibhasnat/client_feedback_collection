@@ -43,7 +43,7 @@ export default async function WallPage({ params, searchParams }: PageProps<"/[sl
 
   return (
     <SiteFrame theme={site.theme}>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: reviewJsonLd(site, site.testimonials, `/${site.workspace.slug}`) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: reviewJsonLd(site, list, `/${site.workspace.slug}`) }} />
       <PublicWall site={site} list={list} activeTag={activeTag} q={q} basePath={`/${site.workspace.slug}`} />
       <SiteAnalytics seo={site.seo} />
     </SiteFrame>

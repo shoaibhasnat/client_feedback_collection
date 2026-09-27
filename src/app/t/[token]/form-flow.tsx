@@ -142,6 +142,11 @@ export function FormFlow(props: Props) {
     "--tc-text": props.theme.text,
     "--tc-muted": props.theme.muted,
     "--tc-border": props.theme.border,
+    ...(props.theme.fontBody ? { fontFamily: props.theme.fontBody } : {}),
+    ...(props.theme.fontHeading ? { "--tc-font-heading": props.theme.fontHeading } : {}),
+    ...(props.theme.backgroundImage
+      ? { backgroundImage: `url("${props.theme.backgroundImage}")`, backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }
+      : {}),
   } as React.CSSProperties;
 
   // Inside the dashboard preview the page already has a <main>.
@@ -170,7 +175,14 @@ export function FormFlow(props: Props) {
         </div>
       )}
 
-      <Main className="mx-auto flex w-full max-w-xl flex-1 flex-col px-5 pb-10 pt-6 sm:pt-12">
+      {props.theme.fontsHref && <link rel="stylesheet" href={props.theme.fontsHref} precedence="default" />}
+      <Main
+        className={cn(
+          "mx-auto flex w-full max-w-xl flex-1 flex-col px-5 pb-10 pt-6 sm:pt-12",
+          // Keep text readable over an owner-chosen background photo.
+          props.theme.backgroundImage && "my-4 rounded-2xl bg-[var(--tc-bg)]/95 shadow-lg sm:my-10",
+        )}
+      >
         {banner && (
           <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             {banner}

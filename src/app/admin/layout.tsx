@@ -39,6 +39,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
         { href: "/admin/projects", label: "Projects" },
         { href: "/admin/requests", label: "Requests" },
         { href: "/admin/testimonials", label: "Testimonials", badge: toReview ?? 0 },
+        { href: "/admin/collections", label: "Collections" },
         { href: "/admin/forms", label: "Forms" },
         { href: "/admin/settings", label: "Site & Settings" },
       ]}

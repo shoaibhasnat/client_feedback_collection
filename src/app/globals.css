@@ -21,6 +21,10 @@ body {
   color: var(--tc-text);
 }
 
+.tc-form h1 {
+  font-family: var(--tc-font-heading, inherit);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

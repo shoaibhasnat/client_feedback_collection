@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { TemplateSnapshot } from "@/lib/form/types";
+import { FONTS, googleFontsHref, parseTheme } from "@/lib/site/config";
 
 // The public form has no login: the request token is the only key (brief 3.6).
 // Every query below is pinned to the single request that token maps to, and its workspace.
@@ -51,22 +52,40 @@ export async function loadRequestByToken(token: string): Promise<TokenState> {
   return { state: "ok", request };
 }
 
-export type PublicTheme = { primary: string; background: string; surface: string; text: string; muted: string; border: string };
-
-const HEX = /^#[0-9a-fA-F]{3,8}$/;
+export type PublicTheme = {
+  primary: string;
+  background: string;
+  surface: string;
+  text: string;
+  muted: string;
+  border: string;
+  /** Fonts and optional background image from the site theme (brief §6: the form uses the same theme). */
+  fontHeading?: string;
+  fontBody?: string;
+  fontsHref?: string;
+  backgroundImage?: string | null;
+};
 
 export async function loadFormBranding(workspaceId: string, ownerPhotoPath: string | null) {
   const admin = createAdminClient();
   const { data } = await admin.from("site_settings").select("theme, profile").eq("workspace_id", workspaceId).maybeSingle();
-  const light = ((data?.theme as Record<string, unknown>)?.light ?? {}) as Record<string, string>;
-  const pick = (k: string, fallback: string) => (HEX.test(light[k] ?? "") ? light[k] : fallback);
+  const site = parseTheme(data?.theme);
+  // The form follows the site's mode; "system" uses the light palette (the form must stay readable everywhere).
+  const palette = site.mode === "dark" ? site.dark : site.light;
+  const heading = FONTS.find((f) => f.name === site.fonts.heading)!;
+  const body = FONTS.find((f) => f.name === site.fonts.body)!;
+  let backgroundImage: string | null = null;
+  const bg = site.form.background_image;
+  if (bg && bg.startsWith(`${workspaceId}/`)) {
+    const { data: signedBg } = await admin.storage.from("uploads").createSignedUrl(bg, 3600);
+    backgroundImage = signedBg?.signedUrl ?? null;
+  }
   const theme: PublicTheme = {
-    primary: pick("primary", "#1f4fd8"),
-    background: pick("background", "#ffffff"),
-    surface: pick("surface", "#f6f7f9"),
-    text: pick("text", "#14171f"),
-    muted: pick("muted", "#5b6272"),
-    border: pick("border", "#e3e6eb"),
+    ...palette,
+    fontHeading: `'${heading.name}', ${heading.category}`,
+    fontBody: `'${body.name}', ${body.category}`,
+    fontsHref: googleFontsHref(site),
+    backgroundImage,
   };
 
   // Prefer the owner's current photo; fall back to the one captured in the snapshot.

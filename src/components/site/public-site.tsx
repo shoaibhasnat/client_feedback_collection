@@ -1,4 +1,4 @@
-import Image from "next/image";
+import NextImage from "next/image";
 import type { CSSProperties, ReactNode } from "react";
 import type { CardField, LayoutConfig, ThemeConfig } from "@/lib/site/config";
 import { googleFontsHref, themeCss } from "@/lib/site/config";
@@ -8,6 +8,16 @@ import type { PublicSite, PublicTag, PublicTestimonial } from "@/lib/site/types"
 // No data access here: the public routes and the dashboard's live preview render the same markup.
 
 const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
+
+/** next/image (resized, AVIF/WebP) for our own media routes; a plain lazy <img> for anything else (e.g. preview URLs). */
+function Image(props: { src: string; alt: string; width: number; height: number; sizes?: string; className?: string; priority?: boolean }) {
+  if (props.src.startsWith("/")) return <NextImage {...props} />;
+  const { priority, sizes: _sizes, ...rest } = props;
+  void _sizes;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img {...rest} alt={props.alt} loading={priority ? "eager" : "lazy"} decoding="async" />;
+}
+
 
 const COLUMN_CLASSES = {
   grid: { 2: "sm:grid-cols-2", 3: "sm:grid-cols-2 lg:grid-cols-3", 4: "sm:grid-cols-2 lg:grid-cols-4" },
@@ -135,7 +145,6 @@ function SiteLogo({ site }: { site: PublicSite }) {
   return (
     <picture>
       {mode === "system" && logoDark && <source srcSet={logoDark} media="(prefers-color-scheme: dark)" />}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={primary} alt={siteName} className="h-8 w-auto max-w-48 object-contain" width={160} height={32} />
     </picture>
   );
