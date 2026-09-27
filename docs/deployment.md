@@ -25,8 +25,10 @@ works in place of Vercel.
 
 ## 2. The app on Vercel
 
-1. Import the repository.
-2. Set these environment variables for Production and Preview:
+1. Import the repository. The repo's `vercel.json` sets the framework to Next.js. If a build fails with
+   *No Output Directory named "public" found*, check **Settings → Build and Deployment → Framework Preset**
+   is **Next.js**, and that Output Directory has no override.
+2. Set these environment variables for Production and Preview (the app will not run without the Supabase ones):
    - `NEXT_PUBLIC_SUPABASE_URL`
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
    - `SUPABASE_SERVICE_ROLE_KEY`
