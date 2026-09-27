@@ -192,6 +192,21 @@ table and a stored file, then as owner A:
 | Clickable answer sentences wrapped one per line | Rendered inline |
 | Aborted test run left test data behind | Added `cleanupRun()` safety net in the isolation suite |
 
+### Security review (post-build, commit `35f3a98`)
+
+A focused security pass confirmed two real issues against the running instance and fixed both;
+`tests/security.test.ts` now guards against regressions (120 tests total).
+
+| Severity | Issue | Root cause | Fix |
+| --- | --- | --- | --- |
+| **Critical** | Any signed-in workspace owner could read super-admin data (all users' emails, workspace metadata, invites, audit log incl. IP hashes) by requesting the RSC payload of `/superadmin/*` | Those pages query with the **service-role key** but the super-admin check lived only in the layout; Next.js partial rendering still produces a page segment's RSC payload when a layout redirects | Call `requireSuperAdmin()` at the top of every super-admin page, before any service-role query (per the Next.js "check close to the data source" guidance). Mutations were already guarded. |
+| Medium | Open redirect: `safeNext()` and `/auth/confirm` accepted `/\host`, which browsers resolve to an absolute URL | Guard only rejected `//`, not backslash/control-char variants | Shared `safeRelativePath()` — one leading slash, next char not `/` or `\`, no control chars — used in login and `/auth/confirm` |
+
+Checked and found sound: super-admin mutations (all call `requireSuperAdmin` before any write); cross-workspace
+owner data and files (RLS + storage policies, 98 isolation tests); the token form's workspace scoping;
+single-use invite claiming. Noted as accepted/lower risk: Supabase SSR keeps auth cookies readable by JS
+(needed by the SSR library; no XSS sink found) and in-memory rate limiting (single instance).
+
 ---
 
 ## 7. Known limitations
