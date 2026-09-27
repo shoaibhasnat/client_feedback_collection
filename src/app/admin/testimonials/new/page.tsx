@@ -3,12 +3,16 @@ import { PageHeader } from "@/components/ui";
 import { requireOwner } from "@/lib/auth";
 import { saveManualAction } from "../actions";
 import { ManualTestimonialForm } from "../manual-form";
+import type { Tag } from "@/lib/tags";
 
 export const metadata: Metadata = { title: "Add testimonial" };
 
 export default async function NewTestimonialPage() {
   const { supabase } = await requireOwner();
-  const { data: clients } = await supabase.from("clients").select("id, name").order("name");
+  const [{ data: clients }, { data: tags }] = await Promise.all([
+    supabase.from("clients").select("id, name").order("name"),
+    supabase.from("tags").select("id, name, type, color").order("name"),
+  ]);
   return (
     <>
       <PageHeader
@@ -21,6 +25,7 @@ export default async function NewTestimonialPage() {
         clients={clients ?? []}
         meta={{ client_id: null, source: "upwork_review", proof_link: null }}
         proofUrl={null}
+        tags={(tags ?? []) as Tag[]}
         initial={{
           display_quote: "",
           headline: null,

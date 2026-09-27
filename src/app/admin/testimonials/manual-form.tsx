@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Field, Input, Select } from "@/components/ui";
 import type { EditorState } from "./actions";
 import { EditorForm, type EditorValues } from "./testimonial-editor";
+import type { Tag } from "@/lib/tags";
 
 export function ManualTestimonialForm({
   action,
@@ -11,12 +12,16 @@ export function ManualTestimonialForm({
   clients,
   meta,
   proofUrl,
+  tags = [],
+  selectedTags = [],
 }: {
   action: (prev: EditorState, fd: FormData) => Promise<EditorState>;
   initial: EditorValues;
   clients: { id: string; name: string }[];
   meta: { client_id: string | null; source: string; proof_link: string | null };
   proofUrl: string | null;
+  tags?: Tag[];
+  selectedTags?: string[];
 }) {
   const [quote, setQuote] = useState(initial.display_quote ?? "");
   return (
@@ -26,6 +31,8 @@ export function ManualTestimonialForm({
         initial={initial}
         quote={quote}
         setQuote={setQuote}
+        tags={tags}
+        selectedTags={selectedTags}
         extra={
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Source" htmlFor="source">

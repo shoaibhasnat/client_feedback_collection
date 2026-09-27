@@ -9,6 +9,32 @@ import { consentViolations } from "@/lib/consent";
 import type { ConsentLevel, TemplateSnapshot } from "@/lib/form/types";
 import { storeImage, UploadError } from "@/lib/uploads";
 import { nullIfEmpty } from "@/lib/utils";
+import { itemSchema } from "@/lib/form/steps";
+import { mappingAllows } from "@/lib/form/catalog";
+import { CLIENT_FIELD_OPTIONS } from "@/lib/form/snapshot";
+import { pickTagIds } from "@/lib/tags";
+
+type Ctx = Awaited<ReturnType<typeof assertWritable>>;
+
+/** Turn a database rule violation (consent, media path) into a message for the owner. */
+function friendlyError(message: string): string {
+  const m = /consent_violation: (.*)$/.exec(message);
+  if (m) return m[1];
+  if (message.includes("must be a file in this workspace")) return "That image isn't one of this workspace's files.";
+  return message;
+}
+
+async function syncTestimonialTags(ctx: Ctx, testimonialId: string, formData: FormData) {
+  if (formData.get("tags_present") !== "1") return;
+  const { data: tags } = await ctx.supabase.from("tags").select("id");
+  const ids = pickTagIds(formData, tags ?? []);
+  await ctx.supabase.from("testimonial_tags").delete().eq("testimonial_id", testimonialId);
+  if (ids.length) {
+    await ctx.supabase
+      .from("testimonial_tags")
+      .insert(ids.map((tag_id) => ({ workspace_id: ctx.workspace.id, testimonial_id: testimonialId, tag_id })));
+  }
+}
 
 export type EditorState = { error?: string; fieldErrors?: Record<string, string>; ok?: boolean };
 
@@ -93,11 +119,12 @@ export async function saveFromSubmissionAction(submissionId: string, _prev: Edit
   const now = new Date().toISOString();
   const publishedAt = f.visibility === "published" ? (existing?.published_at ?? now) : null;
 
+  let testimonialId = existing?.id ?? null;
   if (existing) {
     const { error } = await ctx.supabase.from("testimonials").update({ ...display, published_at: publishedAt }).eq("id", existing.id);
-    if (error) return { error: error.message };
+    if (error) return { error: friendlyError(error.message) };
   } else {
-    const { error } = await ctx.supabase.from("testimonials").insert({
+    const { data: inserted, error } = await ctx.supabase.from("testimonials").insert({
       ...display,
       workspace_id: ctx.workspace.id,
       submission_id: submissionId,
@@ -106,9 +133,11 @@ export async function saveFromSubmissionAction(submissionId: string, _prev: Edit
       source: "form",
       consent_level: sub.consent_level,
       published_at: publishedAt,
-    });
-    if (error) return { error: error.message };
+    }).select("id").single();
+    if (error) return { error: friendlyError(error.message) };
+    testimonialId = inserted.id;
   }
+  if (testimonialId) await syncTestimonialTags(ctx, testimonialId, formData);
 
   await ctx.supabase
     .from("requests")
@@ -128,34 +157,55 @@ export async function saveFromSubmissionAction(submissionId: string, _prev: Edit
   return { ok: true };
 }
 
-/** Accept selected About You / Contact answers into the client record. Nothing is overwritten silently. */
+/**
+ * Accept selected About You / Contact answers into the client record. Nothing is overwritten
+ * silently: only fields the owner ticked, only from a submitted form, and every value is
+ * re-validated against its item type before it reaches the client.
+ */
 export async function mergeIntoClientAction(submissionId: string, formData: FormData) {
   const ctx = await assertWritable();
   const fields = formData.getAll("field").map(String);
 
   const { data: sub } = await ctx.supabase
     .from("submissions")
-    .select("id, about, contact, requests(client_id, template_snapshot)")
+    .select("id, about, contact, submitted_at, requests(client_id, template_snapshot)")
     .eq("id", submissionId)
     .single();
-  if (!sub) return;
+  if (!sub?.submitted_at) return;
   const req = sub.requests as unknown as { client_id: string; template_snapshot: TemplateSnapshot };
-  const { data: client } = await ctx.supabase.from("clients").select("emails").eq("id", req.client_id).single();
+  const { data: client } = await ctx.supabase.from("clients").select("emails, custom_fields").eq("id", req.client_id).single();
+  const { data: customDefs } = await ctx.supabase.from("settings_custom_fields").select("key").eq("entity", "client");
+  const customKeys = new Set((customDefs ?? []).map((d) => d.key));
 
   const patch: Record<string, unknown> = {};
+  const custom: Record<string, unknown> = { ...((client?.custom_fields ?? {}) as Record<string, unknown>) };
+  let customChanged = false;
+
   for (const item of req.template_snapshot.items) {
     const target = item.maps_to_client_field;
     if (!target || item.section === "question" || !fields.includes(target)) continue;
     const bucket = (item.section === "about" ? sub.about : sub.contact) as Record<string, unknown>;
-    const value = bucket[item.key];
-    if (typeof value !== "string" || !value.trim()) continue;
-    if (target === "email") {
+    const raw = bucket[item.key];
+    if (typeof raw !== "string" || !raw.trim()) continue;
+    const value = raw.trim();
+    if (!itemSchema(item).safeParse(value).success || !mappingAllows(target, item.type)) continue;
+
+    if (target.startsWith("custom:")) {
+      if (!customKeys.has(target.slice(7))) continue;
+      custom[target.slice(7)] = value;
+      customChanged = true;
+    } else if (!(CLIENT_FIELD_OPTIONS as readonly string[]).includes(target)) {
+      continue;
+    } else if (target === "email") {
       const emails = ((client?.emails ?? []) as string[]).filter((e) => e.toLowerCase() !== value.toLowerCase());
       patch.emails = [value.toLowerCase(), ...emails];
+    } else if (target === "photo_url" || target === "logo_url") {
+      if (value.startsWith(`${ctx.workspace.id}/`)) patch[target] = value;
     } else {
-      patch[target] = value.trim();
+      patch[target] = value;
     }
   }
+  if (customChanged) patch.custom_fields = custom;
 
   if (Object.keys(patch).length) {
     await ctx.supabase.from("clients").update(patch).eq("id", req.client_id);
@@ -237,14 +287,14 @@ export async function saveManualAction(testimonialId: string | null, _prev: Edit
   let id = testimonialId;
   if (id) {
     const { error } = await ctx.supabase.from("testimonials").update(row).eq("id", id).is("submission_id", null);
-    if (error) return { error: error.message };
+    if (error) return { error: friendlyError(error.message) };
   } else {
     const { data, error } = await ctx.supabase
       .from("testimonials")
       .insert({ ...row, workspace_id: ctx.workspace.id })
       .select("id")
       .single();
-    if (error) return { error: error.message };
+    if (error) return { error: friendlyError(error.message) };
     id = data.id;
     await logActivity(ctx.supabase, {
       workspaceId: ctx.workspace.id,
@@ -254,6 +304,7 @@ export async function saveManualAction(testimonialId: string | null, _prev: Edit
       action: "added_manually",
     });
   }
+  if (id) await syncTestimonialTags(ctx, id, formData);
   revalidatePath("/admin/testimonials");
   redirect(`/admin/testimonials/${id}?saved=1`);
 }
@@ -267,4 +318,72 @@ export async function deleteTestimonialAction(testimonialId: string) {
   }
   revalidatePath("/admin/testimonials");
   redirect(t?.submission_id ? `/admin/testimonials/review/${t.submission_id}` : "/admin/testimonials?view=all");
+}
+
+export type BulkResult = { ok: boolean; message: string };
+
+/** Bulk actions from the testimonials list (brief §4.5). Consent rules still apply row by row. */
+export async function bulkTestimonialAction(input: { ids: string[]; op: string; tagId?: string | null }): Promise<BulkResult> {
+  const ctx = await assertWritable();
+  const parsed = z
+    .object({
+      ids: z.array(z.uuid()).min(1, "Select at least one testimonial.").max(200),
+      op: z.enum(["publish", "hide", "private", "tag_add", "tag_remove", "delete"]),
+      tagId: z.uuid().nullish(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  const { ids, op, tagId } = parsed.data;
+
+  if (op === "tag_add" || op === "tag_remove") {
+    if (!tagId) return { ok: false, message: "Choose a tag." };
+    const { data: tag } = await ctx.supabase.from("tags").select("id, name").eq("id", tagId).maybeSingle();
+    if (!tag) return { ok: false, message: "Tag not found." };
+    if (op === "tag_add") {
+      const { error } = await ctx.supabase.from("testimonial_tags").upsert(
+        ids.map((id) => ({ workspace_id: ctx.workspace.id, testimonial_id: id, tag_id: tagId })),
+        { onConflict: "testimonial_id,tag_id", ignoreDuplicates: true },
+      );
+      if (error) return { ok: false, message: error.message };
+    } else {
+      await ctx.supabase.from("testimonial_tags").delete().eq("tag_id", tagId).in("testimonial_id", ids);
+    }
+    revalidatePath("/admin/testimonials");
+    return { ok: true, message: `${op === "tag_add" ? "Tagged" : "Untagged"} ${ids.length} with “${tag.name}”.` };
+  }
+
+  if (op === "delete") {
+    const { data: rows } = await ctx.supabase.from("testimonials").select("id, proof_url").in("id", ids);
+    await ctx.supabase.from("testimonials").delete().in("id", ids);
+    const files = (rows ?? []).map((r) => r.proof_url).filter((u): u is string => !!u && u.startsWith(`${ctx.workspace.id}/`));
+    if (files.length) await ctx.supabase.storage.from("uploads").remove(files);
+    revalidatePath("/admin", "layout");
+    return { ok: true, message: `Deleted ${rows?.length ?? 0}. Original client submissions are kept.` };
+  }
+
+  const visibility = op === "publish" ? "published" : op === "hide" ? "hidden" : "private";
+  const { data: rows } = await ctx.supabase.from("testimonials").select("id, published_at, display_quote").in("id", ids);
+  let done = 0;
+  const blocked: string[] = [];
+  for (const row of rows ?? []) {
+    if (visibility === "published" && !row.display_quote) {
+      blocked.push("no display quote");
+      continue;
+    }
+    const { error } = await ctx.supabase
+      .from("testimonials")
+      .update({
+        visibility,
+        published_at: visibility === "published" ? (row.published_at ?? new Date().toISOString()) : null,
+      })
+      .eq("id", row.id);
+    if (error) blocked.push(friendlyError(error.message));
+    else done += 1;
+  }
+  revalidatePath("/admin", "layout");
+  const verb = op === "publish" ? "Published" : op === "hide" ? "Hidden" : "Marked private";
+  return {
+    ok: blocked.length === 0,
+    message: `${verb} ${done}.${blocked.length ? ` ${blocked.length} skipped: ${[...new Set(blocked)].join("; ")}` : ""}`,
+  };
 }

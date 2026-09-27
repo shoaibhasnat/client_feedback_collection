@@ -10,6 +10,7 @@ import { signPaths } from "@/lib/uploads";
 import { firstName, formatDate } from "@/lib/utils";
 import { deleteTestimonialAction, dismissMergeAction, mergeIntoClientAction, saveFromSubmissionAction } from "../../actions";
 import { ReviewWorkspace, type EditorValues, type RawAnswer } from "../../testimonial-editor";
+import type { Tag } from "@/lib/tags";
 
 export default async function ReviewSubmissionPage({ params }: PageProps<"/admin/testimonials/review/[submissionId]">) {
   const { submissionId } = await params;
@@ -35,7 +36,11 @@ export default async function ReviewSubmissionPage({ params }: PageProps<"/admin
   const contact = sub.contact as Record<string, unknown>;
   const consent = sub.consent_level as ConsentLevel | null;
 
-  const { data: testimonial } = await supabase.from("testimonials").select("*").eq("submission_id", submissionId).maybeSingle();
+  const [{ data: testimonial }, { data: tags }] = await Promise.all([
+    supabase.from("testimonials").select("*, testimonial_tags(tag_id)").eq("submission_id", submissionId).maybeSingle(),
+    supabase.from("tags").select("id, name, type, color").order("name"),
+  ]);
+  const selectedTags = ((testimonial?.testimonial_tags ?? []) as { tag_id: string }[]).map((t) => t.tag_id);
 
   const itemsBySection = (section: string) => snapshot.items.filter((i) => i.section === section);
   const asText = (v: unknown) => (Array.isArray(v) ? v.join(", ") : v === null || v === undefined ? "" : String(v));
@@ -112,6 +117,8 @@ export default async function ReviewSubmissionPage({ params }: PageProps<"/admin
         consentHelp={consent ? CONSENT_HELP[consent] : null}
         photoUrl={sign(photoPath)}
         logoUrl={sign(logoPath)}
+        tags={(tags ?? []) as Tag[]}
+        selectedTags={selectedTags}
       >
         <Card id="merge">
           <CardHeader

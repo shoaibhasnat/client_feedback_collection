@@ -4,6 +4,18 @@ import { useActionState, useRef, useState } from "react";
 import { Alert, Card, CardHeader, Field, Input, Select, Textarea } from "@/components/ui";
 import { SubmitButton } from "@/components/ui/client";
 import { cn } from "@/lib/utils";
+import { TagPicker } from "@/components/tags";
+import type { Tag } from "@/lib/tags";
+
+/** Which display fields each consent level allows (the database enforces the same rules). */
+function allowed(level: string | null | undefined) {
+  return {
+    name: level !== "anonymous",
+    company: level !== "anonymous",
+    photo: level === "full" || !level,
+    logo: level !== "anonymous",
+  };
+}
 import type { EditorState } from "./actions";
 
 export type EditorValues = {
@@ -41,6 +53,8 @@ export function ReviewWorkspace({
   photoUrl,
   logoUrl,
   children,
+  tags = [],
+  selectedTags = [],
 }: {
   answers: RawAnswer[];
   initial: EditorValues;
@@ -50,6 +64,8 @@ export function ReviewWorkspace({
   photoUrl: string | null;
   logoUrl: string | null;
   children?: React.ReactNode;
+  tags?: Tag[];
+  selectedTags?: string[];
 }) {
   const [quote, setQuote] = useState(initial.display_quote ?? "");
   const quoteRef = useRef<HTMLTextAreaElement>(null);
@@ -100,6 +116,8 @@ export function ReviewWorkspace({
           consentHelp={consentHelp}
           photoUrl={photoUrl}
           logoUrl={logoUrl}
+          tags={tags}
+          selectedTags={selectedTags}
         />
       </div>
     </div>
@@ -117,6 +135,8 @@ export function EditorForm({
   photoUrl,
   logoUrl,
   extra,
+  tags = [],
+  selectedTags = [],
 }: {
   action: (prev: EditorState, fd: FormData) => Promise<EditorState>;
   initial: EditorValues;
@@ -128,6 +148,8 @@ export function EditorForm({
   photoUrl?: string | null;
   logoUrl?: string | null;
   extra?: React.ReactNode;
+  tags?: Tag[];
+  selectedTags?: string[];
 }) {
   const [state, formAction] = useActionState<EditorState, FormData>(action, {});
   const fe = state.fieldErrors ?? {};
@@ -166,13 +188,26 @@ export function EditorForm({
           </Field>
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Display name" htmlFor="display_name" error={fe.display_name}>
-              <Input id="display_name" name="display_name" defaultValue={initial.display_name ?? ""} maxLength={150} />
+              <Input
+                id="display_name"
+                name="display_name"
+                defaultValue={allowed(consentLevel).name ? (initial.display_name ?? "") : ""}
+                disabled={!allowed(consentLevel).name}
+                placeholder={consentLevel === "partial" ? "First name only" : undefined}
+                maxLength={150}
+              />
             </Field>
             <Field label="Role" htmlFor="display_role" error={fe.display_role}>
               <Input id="display_role" name="display_role" defaultValue={initial.display_role ?? ""} maxLength={150} />
             </Field>
             <Field label="Company" htmlFor="display_company" error={fe.display_company}>
-              <Input id="display_company" name="display_company" defaultValue={initial.display_company ?? ""} maxLength={150} />
+              <Input
+                id="display_company"
+                name="display_company"
+                defaultValue={allowed(consentLevel).company ? (initial.display_company ?? "") : ""}
+                disabled={!allowed(consentLevel).company}
+                maxLength={150}
+              />
             </Field>
             <Field label="Rating" htmlFor="rating">
               <Select id="rating" name="rating" defaultValue={initial.rating ?? ""}>
@@ -201,15 +236,37 @@ export function EditorForm({
           {(photoUrl || logoUrl) && (
             <div className="flex flex-wrap gap-6">
               {photoUrl && (
-                <ImageToggle name="use_photo" label="Show photo" url={photoUrl} checked={initial.use_photo ?? false} error={fe.photo_url} round />
+                <ImageToggle
+                  name="use_photo"
+                  label={allowed(consentLevel).photo ? "Show photo" : "Photo not allowed by consent"}
+                  url={photoUrl}
+                  checked={allowed(consentLevel).photo && (initial.use_photo ?? false)}
+                  disabled={!allowed(consentLevel).photo}
+                  error={fe.photo_url}
+                  round
+                />
               )}
-              {logoUrl && <ImageToggle name="use_logo" label="Show logo" url={logoUrl} checked={initial.use_logo ?? false} error={fe.logo_url} />}
+              {logoUrl && (
+                <ImageToggle
+                  name="use_logo"
+                  label={allowed(consentLevel).logo ? "Show logo" : "Logo not allowed by consent"}
+                  url={logoUrl}
+                  checked={allowed(consentLevel).logo && (initial.use_logo ?? false)}
+                  disabled={!allowed(consentLevel).logo}
+                  error={fe.logo_url}
+                />
+              )}
             </div>
           )}
 
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="featured" defaultChecked={initial.featured} className="size-4" /> Featured
           </label>
+          <div>
+            <p className="mb-1.5 text-sm font-medium text-slate-700">Tags</p>
+            <input type="hidden" name="tags_present" value="1" />
+            <TagPicker tags={tags} selected={selectedTags} />
+          </div>
           <SubmitButton>Save testimonial</SubmitButton>
         </div>
       </Card>
@@ -217,11 +274,27 @@ export function EditorForm({
   );
 }
 
-function ImageToggle({ name, label, url, checked, error, round }: { name: string; label: string; url: string; checked: boolean; error?: string; round?: boolean }) {
+function ImageToggle({
+  name,
+  label,
+  url,
+  checked,
+  error,
+  round,
+  disabled,
+}: {
+  name: string;
+  label: string;
+  url: string;
+  checked: boolean;
+  error?: string;
+  round?: boolean;
+  disabled?: boolean;
+}) {
   return (
     <div>
       <label className="flex items-center gap-3 text-sm">
-        <input type="checkbox" name={name} defaultChecked={checked} className="size-4" />
+        <input type="checkbox" name={name} defaultChecked={checked} disabled={disabled} className="size-4" />
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt="" className={cn("size-12 border border-slate-200 object-cover", round ? "rounded-full" : "rounded-md object-contain")} />
         {label}

@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Badge, EmptyState, LinkButton, PageHeader, Table, Td, Th } from "@/components/ui";
+import { Badge, Button, EmptyState, LinkButton, PageHeader, Select } from "@/components/ui";
+import type { Tag } from "@/lib/tags";
+import { TestimonialsTable, type ListRow } from "./bulk-table";
 import { requireOwner } from "@/lib/auth";
 import { cn, formatDate, humanize } from "@/lib/utils";
 
@@ -95,53 +97,61 @@ export default async function TestimonialsPage({ searchParams }: PageProps<"/adm
     );
   }
 
-  const { data: items } = await supabase
+  const tagFilter = typeof sp.tag === "string" ? sp.tag : "";
+  const visFilter = typeof sp.visibility === "string" ? sp.visibility : "";
+  let listQuery = supabase
     .from("testimonials")
-    .select("id, submission_id, display_quote, display_name, source, visibility, featured, rating, date, clients(name)")
+    .select("id, submission_id, display_quote, display_name, source, visibility, featured, rating, date, consent_level, clients(name), testimonial_tags(tags(id, name, type, color))")
     .order("created_at", { ascending: false })
     .limit(500);
+  if (visFilter) listQuery = listQuery.eq("visibility", visFilter);
+  const [{ data: items }, { data: allTags }] = await Promise.all([
+    listQuery,
+    supabase.from("tags").select("id, name, type, color").order("name"),
+  ]);
+
+  const rows: ListRow[] = (items ?? [])
+    .map((t) => ({
+      id: t.id,
+      submission_id: t.submission_id,
+      display_quote: t.display_quote,
+      name: t.display_name ?? (t.clients as unknown as { name: string } | null)?.name ?? "—",
+      source: t.source,
+      visibility: t.visibility,
+      featured: t.featured,
+      rating: t.rating,
+      date: t.date,
+      consent_level: t.consent_level,
+      tags: ((t.testimonial_tags ?? []) as unknown as { tags: Tag }[]).map((x) => x.tags).filter(Boolean),
+    }))
+    .filter((t) => !tagFilter || t.tags.some((tag) => tag.id === tagFilter));
 
   return (
     <>
       {header}
       {tabs}
-      {!items?.length ? (
-        <EmptyState title="No testimonials yet." />
+      <form className="mb-4 flex flex-wrap gap-2" role="search">
+        <input type="hidden" name="view" value="all" />
+        <Select name="tag" defaultValue={tagFilter} aria-label="Filter by tag" className="w-48">
+          <option value="">All tags</option>
+          {(allTags ?? []).map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </Select>
+        <Select name="visibility" defaultValue={visFilter} aria-label="Filter by visibility" className="w-44">
+          <option value="">Any visibility</option>
+          <option value="published">Published</option>
+          <option value="hidden">Hidden</option>
+          <option value="private">Private</option>
+        </Select>
+        <Button variant="outline">Apply</Button>
+      </form>
+      {!rows.length ? (
+        <EmptyState title={tagFilter || visFilter ? "No testimonials match." : "No testimonials yet."} />
       ) : (
-        <Table>
-          <thead>
-            <tr>
-              <Th>Quote</Th>
-              <Th>Name</Th>
-              <Th>Source</Th>
-              <Th>Visibility</Th>
-              <Th>Rating</Th>
-              <Th>Date</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((t) => (
-              <tr key={t.id} className="hover:bg-slate-50">
-                <Td className="max-w-md">
-                  <Link
-                    href={t.submission_id ? `/admin/testimonials/review/${t.submission_id}` : `/admin/testimonials/${t.id}`}
-                    className="line-clamp-2 text-slate-900 hover:underline"
-                  >
-                    {t.display_quote || <em className="text-slate-400">No display quote yet</em>}
-                  </Link>
-                  {t.featured && <Badge tone="amber" className="mt-1">Featured</Badge>}
-                </Td>
-                <Td>{t.display_name ?? (t.clients as unknown as { name: string } | null)?.name ?? "—"}</Td>
-                <Td>{humanize(t.source)}</Td>
-                <Td>
-                  <Badge tone={t.visibility === "published" ? "green" : t.visibility === "private" ? "red" : "slate"}>{t.visibility}</Badge>
-                </Td>
-                <Td className="text-amber-500">{t.rating ? "★".repeat(t.rating) : "—"}</Td>
-                <Td>{formatDate(t.date)}</Td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+        <TestimonialsTable rows={rows} tags={(allTags ?? []) as Tag[]} readOnly={readOnly} />
       )}
     </>
   );
