@@ -1,11 +1,11 @@
-# Testimonial Collector — Phase 1 (Collect)
+# Testimonial Collector — Phases 1–2 (Collect, Configure)
 
 A multi-tenant web app where independent businesses collect structured client testimonials,
 keep a lightweight CRM of clients and projects, and review submissions. Built from
-*Testimonial Collector App — Developer Brief* (Sep 27, 2026). This repository covers **Phase 1**.
+*Testimonial Collector App — Developer Brief* (Sep 27, 2026). This repository covers **Phases 1–2**.
 
 **Documentation:** [Application guide](docs/APP.md) (architecture, data model, security, conventions) ·
-[Phase 1 — Collect](docs/phases/PHASE-1.md) (scope, acceptance criteria, verification, handover).
+[Phase 1 — Collect](docs/phases/PHASE-1.md) · [Phase 2 — Configure](docs/phases/PHASE-2.md) (scope, acceptance criteria, verification, handover).
 
 **Stack:** Next.js 16 (App Router, TypeScript) · Supabase (Postgres, Auth, Storage, Row Level Security) ·
 Tailwind CSS 4 · Zod · sharp · Vitest.
@@ -23,10 +23,19 @@ Tailwind CSS 4 · Zod · sharp · Vitest.
 | Review | Inbox of submissions; raw answers on the left (click a sentence to add it to the quote), editable showcase testimonial on the right with a character counter; publish/hidden/private; consent guard blocks publishing beyond what the client agreed to; side-by-side merge of About you / Contact answers into the client profile |
 | Seed | Each new workspace gets the default "Standard" template (5 questions, 7 About you fields, 4 Contact fields), message templates and a theme preset |
 
-**Deferred to later phases (by design):** form builder and per-client/per-request overrides UI (Phase 2; the
-snapshot engine already supports overrides), tags UI, public wall/collections/SEO (Phase 3), video, widget,
-image cards, client approval flow, CSV import/export, workspace deletion with 30-day purge and data export (Phase 4),
-TOTP two-factor.
+## What's in Phase 2
+
+| Area | Included |
+| --- | --- |
+| Form builder (`/admin/forms`) | Multiple templates (create, duplicate, rename, default, archive); questions, About you and Contact fields with add/edit, drag-and-drop reorder (mouse + keyboard), archive/restore, prefill defaults and client-property mapping; rating/consent/thank-you settings; every client-facing string editable; live mobile/desktop preview |
+| Per-request & per-client settings | "Customize form" step: show/hide, required/optional, prefill (client, project, custom value) and lock for every item plus rating and consent; quick presets; save as client defaults; preview built from the exact snapshot the request stores. Client "Form preferences" page |
+| Custom fields | Owner-defined client and project fields (text, number, date, dropdown, URL) on forms, detail pages and as prefill/merge targets |
+| Tags | Create, edit, merge, delete; tag clients and testimonials; filters; bulk publish/hide/private/tag/untag/delete |
+| Consent & integrity | Enforced in Postgres: consent read from the submission, no publishing beyond it, withdrawal unpublishes, owners can't edit submissions, frozen request snapshots, media must be workspace files |
+
+**Deferred to later phases (by design):** public wall, appearance editor, filtered links, collections, SEO
+(Phase 3); video, widget, image cards, client approval flow, CSV import/export, custom CSS, workspace
+deletion with 30-day purge and data export (Phase 4); TOTP two-factor.
 
 ## Local setup
 

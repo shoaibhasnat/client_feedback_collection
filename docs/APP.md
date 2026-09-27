@@ -5,7 +5,7 @@ that every phase builds on. Phase-specific scope, status and verification live i
 [`docs/phases/`](phases/). Setup and deploy commands live in the [README](../README.md).
 
 - **Source of truth for requirements:** *Testimonial Collector App — Developer Brief* (Sep 27, 2026), in the parent folder.
-- **Current state:** Phase 1 (Collect) complete. See [Phase 1](phases/PHASE-1.md).
+- **Current state:** Phases 1 (Collect) and 2 (Configure) complete. See [Phase 1](phases/PHASE-1.md) · [Phase 2](phases/PHASE-2.md).
 
 ---
 
@@ -34,7 +34,7 @@ a **super admin** creates workspaces and invites owners.
 | Phase | Name | Scope | Status |
 | --- | --- | --- | --- |
 | 1 | Collect | Tenancy + RLS, super admin, invites, login, clients/projects CRM, request links, client form (no video), inbox, basic testimonial editing | ✅ Done — [details](phases/PHASE-1.md) |
-| 2 | Configure | Form builder, per-client/per-request form settings, multiple templates, custom fields, full consent enforcement, manual testimonials, tags | Not started |
+| 2 | Configure | Form builder, per-client/per-request form settings, multiple templates, custom fields, full consent enforcement, manual testimonials, tags | ✅ Done — [details](phases/PHASE-2.md) |
 | 3 | Showcase | Public wall, appearance/theme editor, filtered links, collections, single-testimonial pages, SEO | Not started |
 | 4 | Extras | Video, embeddable widget, image cards, client approval flow, reminders, CSV import/export, custom CSS | Not started |
 
@@ -112,7 +112,9 @@ app/
 │  ├─ config.toml                     local stack config (public sign-up disabled)
 │  └─ migrations/
 │     ├─ 20260927000001_core.sql      enums, tables, tenancy helpers, RLS, triggers
-│     └─ 20260927000002_seed_storage.sql  seed_workspace(), superadmin stats, storage bucket + policies
+│     ├─ 20260927000002_seed_storage.sql  seed_workspace(), superadmin stats, storage bucket + policies
+│     └─ 20260928000001_phase2_configure.sql  prefill field, presets, submission column grants,
+│                                        consent + media triggers, frozen snapshots
 ├─ scripts/seed-superadmin.ts         super admin bootstrap
 ├─ src/
 │  ├─ proxy.ts                        session refresh + auth gate
@@ -120,9 +122,15 @@ app/
 │  │  ├─ supabase/{server,admin,transport}.ts
 │  │  ├─ auth.ts                      requireOwner / requireSuperAdmin / assertWritable
 │  │  ├─ form/
-│  │  │  ├─ types.ts                  FormItemRow, SnapshotItem, TemplateSnapshot, FormValues, Step
+│  │  │  ├─ types.ts                  FormItemRow, ItemSettings, SnapshotItem, TemplateSnapshot, FormPreset, Step
+│  │  │  ├─ settings.ts               per-item settings: precedence, presets, diffs, input cleaning
 │  │  │  ├─ snapshot.ts               buildSnapshot(): freeze template + resolve per-item settings
-│  │  │  └─ steps.ts                  buildSteps, validation (Zod), sanitizeValues, consentText
+│  │  │  ├─ steps.ts                  buildSteps, validation (Zod), sanitizeValues, consentText
+│  │  │  └─ catalog.ts                type labels, section/type rules, mapping compatibility
+│  │  ├─ form-customize.ts            request overrides / client defaults as diffs, preview extras
+│  │  ├─ form-preview.ts              builder preview (sample client)
+│  │  ├─ custom-fields.ts             custom field types, parsing, formatting
+│  │  ├─ tags.ts                      tag types, colours, id picking
 │  │  ├─ requests.ts                  prepareSnapshot, insertRequest, buildMessage
 │  │  ├─ public-form.ts               loadRequestByToken, branding, signed form images
 │  │  ├─ invites.ts                   issueInvite (hash-only storage), lookupInvite
@@ -198,14 +206,14 @@ All tables: `id uuid`, `created_at`, `updated_at` (trigger-maintained). Flexible
 | `projects` | `client_id`, platform, dates, status, `budget`/`currency` (private), `links jsonb`, `outcomes`, `notes` |
 | `attachments` | Files on a client or project (`owner_type`, `owner_id`, storage `file_url`) |
 | `form_templates` | `name`, `is_default` (one per workspace), `settings jsonb`, `copy jsonb`, `archived_at` |
-| `form_items` | Questions / About You / Contact fields: `section`, `key`, `type`, `options`, `required`, `visibility`, `maps_to_client_field`, `default_shown`, `default_prefill*`, `sort_order`, `archived_at` |
+| `form_items` | Questions / About You / Contact fields: `section`, `key` (immutable), `type`, `options`, `required`, `visibility`, `maps_to_client_field` (incl. `custom:<key>`), `default_shown`, `default_prefill` + `default_prefill_field` / `default_prefill_value` / `default_prefill_locked`, `sort_order`, `archived_at` |
 | `requests` | `token` (unique, ≥128-bit), `template_snapshot jsonb` (frozen), `item_overrides`, `personal_message`, `status` + timestamps, `expires_at`, `revoked_at` |
-| `submissions` | Raw client data, **never overwritten by the owner**: `answers`, `about`, `contact`, `rating`, `consent_level`, `consent_text`, `consent_at`, `progress_step`, `submitted_at`, `merge_status`, `ip_hash`, `user_agent` |
+| `submissions` | Raw client data, **never overwritten by the owner** (owners may only update `merge_status`, `merge_resolved_at`, `submitted_at`): `answers`, `about`, `contact`, `rating`, `consent_level`, `consent_text`, `consent_at`, `progress_step`, `submitted_at`, `merge_status`, `ip_hash`, `user_agent` |
 | `testimonials` | Editable showcase layer: `display_quote`, `headline`, display fields, `photo_url`/`logo_url`, `consent_level` copy, `visibility` (published/hidden/private), `featured`, `source` (form/upwork_review/manual), `proof_url` |
 | `tags`, `testimonial_tags`, `client_tags` | Labels (UI in Phase 2) |
 | `collections`, `collection_items` | Hand-picked sets (Phase 3) |
 | `widgets` | Embed configs (Phase 4) |
-| `site_settings` | One row per workspace: `profile`, `theme`, `layout`, `seo`, `custom_css`, `message_templates`, `onboarding` |
+| `site_settings` | One row per workspace: `profile`, `theme`, `layout`, `seo`, `custom_css`, `message_templates`, `form_presets`, `onboarding` |
 | `theme_versions` | Theme history (Phase 3) |
 | `settings_custom_fields` | Owner-defined client/project fields (Phase 2) |
 | `activity_log` | Workspace timeline: `client_id`, `entity_type`, `entity_id`, `action`, `meta` |
@@ -223,8 +231,11 @@ separate layer, so the client's original wording is always preserved.
 `shown`, `required`, `prefill_value`, `prefill_locked`, the render context (`client_first_name`,
 `project_name`, `company`) and the owner's display info. The client form renders **only** from this
 snapshot, so editing a template never changes an in-flight request or an existing submission.
-Precedence for per-item settings: request override → client `form_defaults` → template default
-(the override hooks exist in `buildSnapshot`; their UI arrives in Phase 2).
+Per-item settings (visibility, requirement, prefill source/value, locked) resolve **request override →
+client `form_defaults` → template default** (`lib/form/settings.ts`). Rating and consent are pseudo-items
+(`__rating`, `__consent`); hiding consent fixes the answer to Private. `requests.item_overrides` and
+`clients.form_defaults` store only the differences from their baseline. Snapshots are immutable once
+written (trigger). Version 1 snapshots (Phase 1) remain readable.
 
 ### Workspace seed (`seed_workspace(ws)`)
 
@@ -249,7 +260,9 @@ preset, message templates, reminder days = 3) and the default **Standard** templ
 | Uploads | Type + size checked; images decoded and re-encoded with sharp (strips EXIF incl. GPS); PDFs checked for `%PDF-` magic. Stored privately, served via short-lived signed URLs. |
 | Headers | `nosniff`, `SAMEORIGIN` frame policy, strict referrer; `/t/*` and `/invite/*` add `no-referrer`, `noindex`, `no-store`. |
 | IP addresses | Only salted hashes are stored (`IP_HASH_SALT`). |
-| Consent | Level, exact text shown and timestamp stored per submission. `consentViolations()` blocks publishing beyond consent. |
+| Consent | Level, exact text shown and timestamp stored per submission. Enforced in the database: the `enforce_testimonial_rules` trigger reads consent from the submission and rejects publishing beyond it; withdrawal auto-unpublishes. `consentViolations()` mirrors the rules in the UI. |
+| Submission integrity | Owners can't insert submissions or change answers/consent (column-level grants). |
+| Media references | Testimonial photo/logo must be files in the workspace's folder; proof may also be an http(s) link (trigger). |
 | Right to be forgotten | Deleting a client cascades to projects, requests, submissions, testimonials, notes, activity and removes their files. |
 | Super admin | Server-side check on every request and action; no business data in the panel; no impersonation. |
 | Suspension | Owner read-only (enforced by `can_write` in RLS); request links show "temporarily unavailable". |
@@ -289,7 +302,10 @@ preset, message templates, reminder days = 3) and the default **Standard** templ
 - **Service-role queries** must be scoped in the same function; add a comment saying how.
 - **Never modify `submissions`** from owner features except merge bookkeeping (`merge_status`) and reopen (`submitted_at`).
 - **New business table?** Add `workspace_id` + composite FKs, append it to both DO-loop arrays in a new migration (RLS + immutability), and add it to `BUSINESS_TABLES` in `tests/helpers.ts` so isolation tests cover it.
-- **Form behaviour** comes from the snapshot only; new item settings belong in `SnapshotItem` and `buildSnapshot`.
+- **Form behaviour** comes from the snapshot only; new item settings belong in `ItemSettings`, `resolveSettings` and `buildSnapshot`.
+- **Previews** render the real `FormFlow` with `preview` — never build a parallel renderer, or "the preview matches" stops being guaranteed.
+- **Consent rules** live in `public.consent_violation()` (database) and `lib/consent.ts` (UI); change both together.
+- **Keys are permanent**: form item keys and custom field keys/types never change after creation.
 - **To-one embeds** from PostgREST can arrive as objects or arrays; normalise with `one()` from `lib/utils`.
 - Log owner-visible events with `logActivity`; log platform/security events with `logAudit`.
 - Keep migrations append-only; never edit a migration that has been applied to a shared database.
