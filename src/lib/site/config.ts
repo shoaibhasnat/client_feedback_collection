@@ -249,15 +249,12 @@ function paletteVars(p: Palette): string {
  * Scoped CSS custom properties for one site. Inputs are validated hex colours and enum values only,
  * so the output can't break out of the <style> block.
  */
-export function themeCss(theme: ThemeConfig, scope: string): string {
-  const font = (name: string, fallback: string) => `'${name}', ${fallback}`;
-  const heading = FONTS.find((f) => f.name === theme.fonts.heading)!;
-  const body = FONTS.find((f) => f.name === theme.fonts.body)!;
+export function themeCss(theme: ThemeConfig, scope: string, fontStack: (name: FontName) => string = defaultFontStack): string {
   const base =
     `${scope}{` +
     `--site-radius:${RADIUS[theme.radius]};` +
-    `--site-font-heading:${font(heading.name, heading.category)};` +
-    `--site-font-body:${font(body.name, body.category)};` +
+    `--site-font-heading:${fontStack(theme.fonts.heading)};` +
+    `--site-font-body:${fontStack(theme.fonts.body)};` +
     `--site-base:${theme.fonts.base_size}px;` +
     `--site-gap:${theme.density === "compact" ? "0.75rem" : "1.25rem"};` +
     `--site-pad:${theme.density === "compact" ? "1rem" : "1.5rem"};` +
@@ -266,9 +263,8 @@ export function themeCss(theme: ThemeConfig, scope: string): string {
   return `${base}@media (prefers-color-scheme: dark){${scope}{${paletteVars(theme.dark)}}}`;
 }
 
-export function googleFontsHref(theme: ThemeConfig): string {
-  const families = [...new Set([theme.fonts.heading, theme.fonts.body])]
-    .map((f) => `family=${encodeURIComponent(f).replace(/%20/g, "+")}:wght@400;500;600;700`)
-    .join("&");
-  return `https://fonts.googleapis.com/css2?${families}&display=swap`;
+/** Plain stack used where self-hosted fonts aren't available (tests, OG images). */
+export function defaultFontStack(name: FontName): string {
+  const f = FONTS.find((x) => x.name === name) ?? FONTS[0];
+  return `'${f.name}', ${f.category}`;
 }

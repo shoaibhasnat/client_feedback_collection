@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyThemePreset, googleFontsHref, parseLayout, parseSeo, parseTheme, themeCss, validAnalytics } from "@/lib/site/config";
+import { applyThemePreset, parseLayout, parseSeo, parseTheme, themeCss, validAnalytics } from "@/lib/site/config";
 import { filterTestimonials, resolveTag } from "@/lib/site/public-data";
 import { reviewJsonLd } from "@/lib/site/seo";
 import type { PublicSite, PublicTestimonial } from "@/lib/site/types";
@@ -38,10 +38,10 @@ describe("theme parsing", () => {
     expect(t.branding).toMatchObject({ site_name: "Acme", logo_light: "ws/branding/l.webp" });
   });
 
-  it("only requests curated fonts from Google Fonts", () => {
-    expect(googleFontsHref(parseTheme({ fonts: { heading: "Playfair Display", body: "Inter" } }))).toBe(
-      "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap",
-    );
+  it("uses the provided font stacks for the chosen curated fonts", () => {
+    const css = themeCss(parseTheme({ fonts: { heading: "Playfair Display", body: "Inter" } }), ".x", (n) => `stack-${n.replace(/ /g, "")}`);
+    expect(css).toContain("--site-font-heading:stack-PlayfairDisplay");
+    expect(css).toContain("--site-font-body:stack-Inter");
   });
 });
 

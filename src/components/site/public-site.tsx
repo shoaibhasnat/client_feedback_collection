@@ -1,7 +1,8 @@
 import NextImage from "next/image";
 import type { CSSProperties, ReactNode } from "react";
 import type { CardField, LayoutConfig, ThemeConfig } from "@/lib/site/config";
-import { googleFontsHref, themeCss } from "@/lib/site/config";
+import { themeCss } from "@/lib/site/config";
+import { fontStack } from "@/lib/site/fonts";
 import type { PublicSite, PublicTag, PublicTestimonial } from "@/lib/site/types";
 
 // Presentational components for the public wall, collections and single-testimonial pages.
@@ -35,11 +36,8 @@ export function SiteFrame({ theme, children, className }: { theme: ThemeConfig; 
       className={cx("tc-site min-h-full bg-[var(--site-background)] text-[var(--site-text)]", className)}
       style={{ fontFamily: "var(--site-font-body)", fontSize: "var(--site-base)" } as CSSProperties}
     >
-      <link rel="preconnect" href="https://fonts.googleapis.com" />
-      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-      <link rel="stylesheet" href={googleFontsHref(theme)} precedence="default" />
-      {/* Validated hex colours and enum values only — see themeCss(). */}
-      <style dangerouslySetInnerHTML={{ __html: themeCss(theme, ".tc-site") }} />
+      {/* Validated hex colours, enum values and self-hosted font stacks only — see themeCss(). */}
+      <style dangerouslySetInnerHTML={{ __html: themeCss(theme, ".tc-site", fontStack) }} />
       {children}
     </div>
   );

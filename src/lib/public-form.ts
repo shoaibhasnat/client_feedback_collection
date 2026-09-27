@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { TemplateSnapshot } from "@/lib/form/types";
-import { FONTS, googleFontsHref, parseTheme } from "@/lib/site/config";
+import { parseTheme, type FontName } from "@/lib/site/config";
 
 // The public form has no login: the request token is the only key (brief 3.6).
 // Every query below is pinned to the single request that token maps to, and its workspace.
@@ -60,9 +60,8 @@ export type PublicTheme = {
   muted: string;
   border: string;
   /** Fonts and optional background image from the site theme (brief §6: the form uses the same theme). */
-  fontHeading?: string;
-  fontBody?: string;
-  fontsHref?: string;
+  fontHeading?: FontName;
+  fontBody?: FontName;
   backgroundImage?: string | null;
 };
 
@@ -72,8 +71,6 @@ export async function loadFormBranding(workspaceId: string, ownerPhotoPath: stri
   const site = parseTheme(data?.theme);
   // The form follows the site's mode; "system" uses the light palette (the form must stay readable everywhere).
   const palette = site.mode === "dark" ? site.dark : site.light;
-  const heading = FONTS.find((f) => f.name === site.fonts.heading)!;
-  const body = FONTS.find((f) => f.name === site.fonts.body)!;
   let backgroundImage: string | null = null;
   const bg = site.form.background_image;
   if (bg && bg.startsWith(`${workspaceId}/`)) {
@@ -82,9 +79,8 @@ export async function loadFormBranding(workspaceId: string, ownerPhotoPath: stri
   }
   const theme: PublicTheme = {
     ...palette,
-    fontHeading: `'${heading.name}', ${heading.category}`,
-    fontBody: `'${body.name}', ${body.category}`,
-    fontsHref: googleFontsHref(site),
+    fontHeading: site.fonts.heading,
+    fontBody: site.fonts.body,
     backgroundImage,
   };
 

@@ -6,6 +6,7 @@ import { buildSteps, renderText, validateStep, type FieldErrors } from "@/lib/fo
 import type { AnswerValue, ConsentLevel, FormValues, SnapshotItem, Step, TemplateSnapshot } from "@/lib/form/types";
 import type { PublicTheme } from "@/lib/public-form";
 import { cn } from "@/lib/utils";
+import { fontStack } from "@/lib/site/fonts";
 import { saveProgress, submitForm, uploadFormImage } from "./actions";
 
 type Props = {
@@ -142,8 +143,8 @@ export function FormFlow(props: Props) {
     "--tc-text": props.theme.text,
     "--tc-muted": props.theme.muted,
     "--tc-border": props.theme.border,
-    ...(props.theme.fontBody ? { fontFamily: props.theme.fontBody } : {}),
-    ...(props.theme.fontHeading ? { "--tc-font-heading": props.theme.fontHeading } : {}),
+    ...(props.theme.fontBody ? { fontFamily: fontStack(props.theme.fontBody) } : {}),
+    ...(props.theme.fontHeading ? { "--tc-font-heading": fontStack(props.theme.fontHeading) } : {}),
     ...(props.theme.backgroundImage
       ? { backgroundImage: `url("${props.theme.backgroundImage}")`, backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }
       : {}),
@@ -175,7 +176,6 @@ export function FormFlow(props: Props) {
         </div>
       )}
 
-      {props.theme.fontsHref && <link rel="stylesheet" href={props.theme.fontsHref} precedence="default" />}
       <Main
         className={cn(
           "mx-auto flex w-full max-w-xl flex-1 flex-col px-5 pb-10 pt-6 sm:pt-12",
