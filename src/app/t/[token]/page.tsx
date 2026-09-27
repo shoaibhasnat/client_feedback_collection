@@ -87,7 +87,11 @@ export default async function TestimonialFormPage({ params }: PageProps<"/t/[tok
     .filter((v): v is string => typeof v === "string" && v !== "");
   const imageUrls = await signFormImages(
     request.workspace_id,
-    { submissionId: draft?.id ?? null, clientId: request.client_id },
+    {
+      submissionId: draft?.id ?? null,
+      clientId: request.client_id,
+      snapshotPrefills: snapshot.items.filter((i) => i.type === "image" && i.prefill_value).map((i) => i.prefill_value!),
+    },
     imagePaths,
   );
 

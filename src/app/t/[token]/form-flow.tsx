@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { Check, Copy, Lock, Star } from "lucide-react";
 import { buildSteps, renderText, validateStep, type FieldErrors } from "@/lib/form/steps";
 import type { AnswerValue, ConsentLevel, FormValues, SnapshotItem, Step, TemplateSnapshot } from "@/lib/form/types";
@@ -40,6 +40,12 @@ export function FormFlow(props: Props) {
   const firstRender = useRef(true);
 
   const step = steps[stepIndex];
+  // False during SSR and until hydration: a tap before then would natively submit the <form>.
+  const hydrated = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
   const copy = (key: string, fallback: string) => renderText(snapshot, snapshot.copy[key] || fallback);
 
   // Move focus to the new screen's heading so keyboard and screen-reader users follow along.
@@ -138,6 +144,8 @@ export function FormFlow(props: Props) {
     "--tc-border": props.theme.border,
   } as React.CSSProperties;
 
+  // Inside the dashboard preview the page already has a <main>.
+  const Main = props.preview ? "div" : "main";
   const progress = Math.round((stepIndex / (steps.length - 1)) * 100);
   const isLast = stepIndex === steps.length - 1;
 
@@ -162,7 +170,7 @@ export function FormFlow(props: Props) {
         </div>
       )}
 
-      <main className="mx-auto flex w-full max-w-xl flex-1 flex-col px-5 pb-10 pt-6 sm:pt-12">
+      <Main className="mx-auto flex w-full max-w-xl flex-1 flex-col px-5 pb-10 pt-6 sm:pt-12">
         {banner && (
           <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
             {banner}
@@ -225,7 +233,7 @@ export function FormFlow(props: Props) {
               )}
               <button
                 type="submit"
-                disabled={status === "saving"}
+                disabled={status === "saving" || !hydrated}
                 className="h-12 flex-1 rounded-xl bg-[var(--tc-primary)] px-6 font-semibold text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--tc-primary)] disabled:opacity-60"
               >
                 {stepIndex === 0
@@ -248,7 +256,7 @@ export function FormFlow(props: Props) {
             )}
           </form>
         )}
-      </main>
+      </Main>
     </div>
   );
 }

@@ -86,12 +86,14 @@ export async function loadFormBranding(workspaceId: string, ownerPhotoPath: stri
  */
 export async function signFormImages(
   workspaceId: string,
-  scope: { submissionId: string | null; clientId: string },
+  scope: { submissionId: string | null; clientId: string; snapshotPrefills?: string[] },
   paths: string[],
 ) {
   const prefixes = [`${workspaceId}/clients/${scope.clientId}/`];
   if (scope.submissionId) prefixes.push(`${workspaceId}/submissions/${scope.submissionId}/`);
-  const valid = [...new Set(paths)].filter((p) => prefixes.some((prefix) => p.startsWith(prefix)));
+  // Exact paths the owner froze into this request's snapshot (e.g. a photo merged from an earlier submission).
+  const frozen = new Set((scope.snapshotPrefills ?? []).filter((p) => p.startsWith(`${workspaceId}/`)));
+  const valid = [...new Set(paths)].filter((p) => frozen.has(p) || prefixes.some((prefix) => p.startsWith(prefix)));
   if (!valid.length) return {};
   const admin = createAdminClient();
   const { data } = await admin.storage.from("uploads").createSignedUrls(valid, 3600);

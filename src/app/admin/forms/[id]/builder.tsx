@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   DndContext,
@@ -328,6 +328,8 @@ function SectionEditor({
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const byId = new Map(active.map((i) => [i.id, i]));
+  // Stable id so dnd-kit's accessibility ids match between server and client render.
+  const dndId = useId();
 
   const onDragEnd = (e: DragEndEvent) => {
     if (!e.over || e.active.id === e.over.id) return;
@@ -367,7 +369,7 @@ function SectionEditor({
           No active {noun}s. {section === "question" ? "Add one to guide your client." : ""}
         </p>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+        <DndContext id={dndId} sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={order} strategy={verticalListSortingStrategy}>
             <ul className="space-y-2" aria-label={`${noun}s`}>
               {order.map((id, index) => {

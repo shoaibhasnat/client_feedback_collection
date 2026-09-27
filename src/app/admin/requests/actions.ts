@@ -6,7 +6,9 @@ import { z } from "zod";
 import { assertWritable } from "@/lib/auth";
 import { logActivity } from "@/lib/audit";
 import { insertRequest, prepareSnapshot } from "@/lib/requests";
-import { buildSteps, estimateMinutes } from "@/lib/form/steps";
+import { clientDefaultsFrom, overridesFrom, prefillChoices, previewExtras } from "@/lib/form-customize";
+import { baselineSettings, cleanPresets } from "@/lib/form/settings";
+import type { FormItemRow, FormPreset, ItemSettings } from "@/lib/form/types";
 import { nullIfEmpty } from "@/lib/utils";
 
 export type CreateRequestState = { error?: string };
@@ -18,6 +20,16 @@ const createSchema = z.object({
   personal_message: z.string().max(1000).nullable(),
   expires_at: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
 });
+
+function parseSettings(value: FormDataEntryValue | null): unknown {
+  if (typeof value !== "string" || !value) return {};
+  if (value.length > 200_000) return {};
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
 
 export async function createRequestAction(_prev: CreateRequestState, formData: FormData): Promise<CreateRequestState> {
   const ctx = await assertWritable();
@@ -33,16 +45,34 @@ export async function createRequestAction(_prev: CreateRequestState, formData: F
     return { error: "The expiry date must be in the future." };
   }
 
+  const settings = parseSettings(formData.get("settings"));
+  const saveAsClientDefaults = formData.get("save_client_defaults") === "on";
+  const args = {
+    workspaceId: ctx.workspace.id,
+    clientId: parsed.data.client_id,
+    projectId: parsed.data.project_id,
+    templateId: parsed.data.template_id,
+  };
+
   let id: string;
   try {
+    // Baseline = template defaults + this client's saved defaults; store only what the owner changed.
+    const base = await prepareSnapshot(ctx.supabase, args);
+    const baseline = baselineSettings(base.rows, base.templateSettings, base.clientDefaults);
+    const overrides = overridesFrom(settings, baseline);
+
+    if (saveAsClientDefaults) {
+      const nextDefaults = clientDefaultsFrom(settings, base.rows, base.templateSettings, base.clientDefaults);
+      await ctx.supabase.from("clients").update({ form_defaults: nextDefaults }).eq("id", parsed.data.client_id);
+    }
+
     ({ id } = await insertRequest(ctx.supabase, {
-      workspaceId: ctx.workspace.id,
-      clientId: parsed.data.client_id,
-      projectId: parsed.data.project_id,
-      templateId: parsed.data.template_id,
+      ...args,
       personalMessage: parsed.data.personal_message,
       // End of the chosen day, UTC.
       expiresAt: parsed.data.expires_at ? `${parsed.data.expires_at}T23:59:59Z` : null,
+      // Client defaults may just have changed, so resolve overrides against the fresh client record.
+      overrides: saveAsClientDefaults ? {} : overrides,
     }));
   } catch (e) {
     return { error: (e as Error).message };
@@ -54,49 +84,67 @@ export async function createRequestAction(_prev: CreateRequestState, formData: F
     entityType: "request",
     entityId: id,
     action: "created",
+    meta: saveAsClientDefaults ? { saved_client_defaults: true } : {},
   });
   revalidatePath("/admin/requests");
   redirect(`/admin/requests/${id}?created=1`);
 }
 
-export type PreviewResult = {
+export type CustomizeData = {
   error?: string;
-  screens?: string[];
-  minutes?: number;
+  rows?: Pick<FormItemRow, "key" | "label" | "section" | "type" | "options" | "maps_to_client_field">[];
+  baseline?: Record<string, ItemSettings>;
+  resolved?: Record<string, ItemSettings>;
+  prefillValues?: Record<string, string | null>;
+  presets?: FormPreset[];
   warnings?: string[];
+  choices?: { clientCustom: { key: string; label: string }[]; projectCustom: { key: string; label: string }[] };
+  preview?: Awaited<ReturnType<typeof previewExtras>>;
 };
 
-/** Live preview of what the client will see, before the request is created. */
+/**
+ * Everything the "Customize form" step needs, plus a preview built from the exact snapshot the
+ * request would store. `settings` (optional) are the owner's current per-item choices.
+ */
 export async function previewRequestAction(input: {
   clientId: string;
   projectId: string | null;
   templateId: string | null;
-}): Promise<PreviewResult> {
+  settings?: unknown;
+  personalMessage?: string | null;
+}): Promise<CustomizeData> {
   const ctx = await assertWritable();
   try {
-    const { snapshot, warnings } = await prepareSnapshot(ctx.supabase, {
+    const args = {
       workspaceId: ctx.workspace.id,
       clientId: input.clientId,
       projectId: input.projectId,
       templateId: input.templateId,
-    });
-    const screens = buildSteps(snapshot).map((s) => {
-      switch (s.kind) {
-        case "welcome":
-          return "Welcome";
-        case "rating":
-          return "Star rating";
-        case "question":
-          return `Question ${s.index + 1}: ${s.item.label}`;
-        case "about":
-          return `About you (${s.items.length} fields)`;
-        case "contact":
-          return `Contact details (${s.items.length} fields, private)`;
-        case "consent":
-          return "Consent";
-      }
-    });
-    return { screens: [...screens, "Thank you"], minutes: estimateMinutes(snapshot), warnings };
+    };
+    const base = await prepareSnapshot(ctx.supabase, args);
+    const baseline = baselineSettings(base.rows, base.templateSettings, base.clientDefaults);
+    const overrides = input.settings === undefined ? {} : overridesFrom(input.settings, baseline);
+    const built = Object.keys(overrides).length ? await prepareSnapshot(ctx.supabase, { ...args, overrides }) : base;
+
+    const [{ data: site }, choices, preview] = await Promise.all([
+      ctx.supabase.from("site_settings").select("form_presets").eq("workspace_id", ctx.workspace.id).single(),
+      prefillChoices(ctx.supabase),
+      previewExtras(ctx.workspace.id, built.snapshot),
+    ]);
+
+    return {
+      rows: base.rows
+        .slice()
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((r) => ({ key: r.key, label: r.label, section: r.section, type: r.type, options: r.options, maps_to_client_field: r.maps_to_client_field })),
+      baseline,
+      resolved: built.resolved,
+      prefillValues: Object.fromEntries(built.snapshot.items.map((i) => [i.key, i.prefill_value])),
+      presets: cleanPresets(site?.form_presets),
+      warnings: built.warnings,
+      choices,
+      preview,
+    };
   } catch (e) {
     return { error: (e as Error).message };
   }
