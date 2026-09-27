@@ -4,6 +4,10 @@ import { useActionState, useState } from "react";
 import { Alert, Card, CardHeader, Field, Input, Select, Textarea } from "@/components/ui";
 import { SubmitButton } from "@/components/ui/client";
 import { CLIENT_SOURCES, CLIENT_STATUSES, CONTACT_METHODS } from "@/lib/constants";
+import { CustomFieldInputs } from "@/components/custom-field-inputs";
+import { TagPicker } from "@/components/tags";
+import type { CustomFieldDef } from "@/lib/custom-fields";
+import type { Tag } from "@/lib/tags";
 import type { FormState } from "./actions";
 
 export type ClientFormValues = {
@@ -30,6 +34,7 @@ export type ClientFormValues = {
   birthday?: string | null;
   photo_signed?: string | null;
   logo_signed?: string | null;
+  custom_fields?: Record<string, unknown>;
 };
 
 export function ClientForm({
@@ -38,12 +43,18 @@ export function ClientForm({
   otherClients,
   isNew,
   imageError,
+  customDefs = [],
+  tags = [],
+  selectedTags = [],
 }: {
   action: (prev: FormState, fd: FormData) => Promise<FormState>;
   values?: ClientFormValues;
   otherClients: { id: string; name: string }[];
   isNew?: boolean;
   imageError?: string;
+  customDefs?: CustomFieldDef[];
+  tags?: Tag[];
+  selectedTags?: string[];
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const [source, setSource] = useState(values.source ?? "direct");
@@ -164,6 +175,22 @@ export function ClientForm({
           </Field>
         </div>
       </Card>
+
+      <Card>
+        <CardHeader title="Tags" description="e.g. industry or service type. Used to filter your client list." />
+        <div className="p-5">
+          <TagPicker tags={tags} selected={selectedTags} />
+        </div>
+      </Card>
+
+      {customDefs.length > 0 && (
+        <Card>
+          <CardHeader title="Custom fields" description="Defined in Site & Settings → Custom fields." />
+          <div className="grid gap-4 p-5 sm:grid-cols-2">
+            <CustomFieldInputs defs={customDefs} values={values.custom_fields ?? {}} errors={fe} />
+          </div>
+        </Card>
+      )}
 
       {isNew && (
         <Card>

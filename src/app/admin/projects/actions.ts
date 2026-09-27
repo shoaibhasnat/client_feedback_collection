@@ -8,6 +8,15 @@ import { logActivity } from "@/lib/audit";
 import { randomToken } from "@/lib/crypto";
 import { IMAGE_TYPES, processImage, UploadError } from "@/lib/uploads";
 import { nullIfEmpty } from "@/lib/utils";
+import { parseCustomFields, type CustomFieldDef } from "@/lib/custom-fields";
+
+async function readCustom(ctx: Awaited<ReturnType<typeof assertWritable>>, formData: FormData, existing: Record<string, unknown> | null) {
+  const { data: defs } = await ctx.supabase
+    .from("settings_custom_fields")
+    .select("id, entity, key, label, type, options")
+    .eq("entity", "project");
+  return parseCustomFields(formData, (defs ?? []) as CustomFieldDef[], existing);
+}
 
 export type FormState = { error?: string; fieldErrors?: Record<string, string>; ok?: boolean };
 
@@ -87,10 +96,12 @@ export async function createProjectAction(_prev: FormState, formData: FormData):
   const ctx = await assertWritable();
   const parsed = parseProject(formData);
   if ("error" in parsed) return parsed;
+  const custom = await readCustom(ctx, formData, null);
+  if (Object.keys(custom.errors).length) return { error: "Check the highlighted fields.", fieldErrors: custom.errors };
 
   const { data, error } = await ctx.supabase
     .from("projects")
-    .insert({ ...parsed.data, workspace_id: ctx.workspace.id })
+    .insert({ ...parsed.data, custom_fields: custom.values, workspace_id: ctx.workspace.id })
     .select("id")
     .single();
   if (error) return { error: error.code === "23503" ? "That client no longer exists." : error.message };
@@ -112,8 +123,11 @@ export async function updateProjectAction(projectId: string, _prev: FormState, f
   const ctx = await assertWritable();
   const parsed = parseProject(formData);
   if ("error" in parsed) return parsed;
+  const { data: current } = await ctx.supabase.from("projects").select("custom_fields").eq("id", projectId).single();
+  const custom = await readCustom(ctx, formData, (current?.custom_fields ?? {}) as Record<string, unknown>);
+  if (Object.keys(custom.errors).length) return { error: "Check the highlighted fields.", fieldErrors: custom.errors };
 
-  const { error } = await ctx.supabase.from("projects").update(parsed.data).eq("id", projectId);
+  const { error } = await ctx.supabase.from("projects").update({ ...parsed.data, custom_fields: custom.values }).eq("id", projectId);
   if (error) return { error: error.message };
 
   await syncClientDates(ctx.supabase, parsed.data.client_id);

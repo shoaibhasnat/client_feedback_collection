@@ -4,6 +4,8 @@ import { useActionState } from "react";
 import { Alert, Card, CardHeader, Field, Input, Select, Textarea } from "@/components/ui";
 import { SubmitButton } from "@/components/ui/client";
 import { PROJECT_PLATFORMS, PROJECT_STATUSES } from "@/lib/constants";
+import { CustomFieldInputs } from "@/components/custom-field-inputs";
+import type { CustomFieldDef } from "@/lib/custom-fields";
 import type { FormState } from "./actions";
 
 export type ProjectFormValues = {
@@ -20,6 +22,7 @@ export type ProjectFormValues = {
   links?: { label: string; url: string }[];
   outcomes?: string | null;
   notes?: string | null;
+  custom_fields?: Record<string, unknown>;
 };
 
 export function ProjectForm({
@@ -27,11 +30,13 @@ export function ProjectForm({
   values = {},
   clients,
   isNew,
+  customDefs = [],
 }: {
   action: (prev: FormState, fd: FormData) => Promise<FormState>;
   values?: ProjectFormValues;
   clients: { id: string; name: string }[];
   isNew?: boolean;
+  customDefs?: CustomFieldDef[];
 }) {
   const [state, formAction] = useActionState<FormState, FormData>(action, {});
   const fe = state.fieldErrors ?? {};
@@ -123,6 +128,15 @@ export function ProjectForm({
           </Field>
         </div>
       </Card>
+
+      {customDefs.length > 0 && (
+        <Card>
+          <CardHeader title="Custom fields" description="Defined in Site & Settings → Custom fields." />
+          <div className="grid gap-4 p-5 sm:grid-cols-2">
+            <CustomFieldInputs defs={customDefs} values={values.custom_fields ?? {}} errors={fe} />
+          </div>
+        </Card>
+      )}
 
       <SubmitButton>{isNew ? "Create project" : "Save changes"}</SubmitButton>
     </form>

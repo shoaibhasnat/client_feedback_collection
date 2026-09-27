@@ -7,6 +7,8 @@ import { CLIENT_SOURCES, CLIENT_STATUSES, PROJECT_STATUSES, REQUEST_STATUS_TONE,
 import { signPaths } from "@/lib/uploads";
 import { formatDate, humanize, one } from "@/lib/utils";
 import { deleteClientAction, deleteNoteAction } from "../actions";
+import { TagChip } from "@/components/tags";
+import { formatCustomValue, type CustomFieldDef } from "@/lib/custom-fields";
 import { NoteForm } from "./note-form";
 
 export default async function ClientDetailPage({ params }: PageProps<"/admin/clients/[id]">) {
@@ -31,6 +33,12 @@ export default async function ClientDetailPage({ params }: PageProps<"/admin/cli
         ? supabase.from("clients").select("id, name").eq("id", client.referred_by_client_id).maybeSingle()
         : Promise.resolve({ data: null }),
     ]);
+  const [{ data: customDefs }, { data: clientTags }] = await Promise.all([
+    supabase.from("settings_custom_fields").select("id, entity, key, label, type, options").eq("entity", "client").order("created_at"),
+    supabase.from("client_tags").select("tags(id, name, color)").eq("client_id", id),
+  ]);
+  const custom = (client.custom_fields ?? {}) as Record<string, unknown>;
+  const tagList = (clientTags ?? []).map((t) => t.tags as unknown as { id: string; name: string; color: string | null }).filter(Boolean);
 
   const sign = await signPaths(supabase, [client.photo_url, client.logo_url]);
   const photo = sign(client.photo_url);
@@ -106,8 +114,18 @@ export default async function ClientDetailPage({ params }: PageProps<"/admin/cli
                   ["Last project", formatDate(client.last_project_date)],
                   ["Follow-up", formatDate(client.follow_up_date)],
                   ["Birthday / anniversary", formatDate(client.birthday)],
+                  ...((customDefs ?? []) as CustomFieldDef[]).map(
+                    (d) => [d.label, formatCustomValue(d, custom[d.key])] as [string, React.ReactNode],
+                  ),
                 ]}
               />
+              {tagList.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  {tagList.map((t) => (
+                    <TagChip key={t.id} tag={t} />
+                  ))}
+                </div>
+              )}
             </div>
           </Card>
 

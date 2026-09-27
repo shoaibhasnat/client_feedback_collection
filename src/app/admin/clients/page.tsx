@@ -21,13 +21,14 @@ export default async function ClientsPage({ searchParams }: PageProps<"/admin/cl
   const source = str("source");
   const status = str("status");
   const has = str("has");
+  const tag = str("tag");
   const sortKey = (str("sort") in SORTS ? str("sort") : "recent") as keyof typeof SORTS;
   const sort = SORTS[sortKey];
 
   const { supabase, readOnly } = await requireOwner();
   let query = supabase
     .from("clients")
-    .select("id, name, company, job_title, source, status, last_project_date, follow_up_date, testimonials(count), projects(count)")
+    .select("id, name, company, job_title, source, status, last_project_date, follow_up_date, testimonials(count), projects(count), client_tags(tag_id)")
     .order(sort.column, { ascending: sort.ascending, nullsFirst: false })
     .limit(500);
   if (q) {
@@ -36,15 +37,16 @@ export default async function ClientsPage({ searchParams }: PageProps<"/admin/cl
   }
   if (source) query = query.eq("source", source);
   if (status) query = query.eq("status", status);
-  const { data } = await query;
+  const [{ data }, { data: tags }] = await Promise.all([query, supabase.from("tags").select("id, name").order("name")]);
 
   const count = (rel: unknown) => (Array.isArray(rel) ? ((rel[0] as { count?: number })?.count ?? 0) : 0);
   const clients = (data ?? []).filter((c) => {
+    if (tag && !(c.client_tags as { tag_id: string }[]).some((t) => t.tag_id === tag)) return false;
     if (has === "yes") return count(c.testimonials) > 0;
     if (has === "no") return count(c.testimonials) === 0;
     return true;
   });
-  const filtered = Boolean(q || source || status || has);
+  const filtered = Boolean(q || source || status || has || tag);
 
   return (
     <>
@@ -59,7 +61,7 @@ export default async function ClientsPage({ searchParams }: PageProps<"/admin/cl
         </Alert>
       )}
 
-      <form className="mb-4 grid gap-2 sm:grid-cols-6" role="search">
+      <form className="mb-4 grid gap-2 sm:grid-cols-7" role="search">
         <Input name="q" defaultValue={q} placeholder="Search name, company, title" aria-label="Search clients" className="sm:col-span-2" />
         <Select name="source" defaultValue={source} aria-label="Source">
           <option value="">All sources</option>
@@ -74,6 +76,14 @@ export default async function ClientsPage({ searchParams }: PageProps<"/admin/cl
           {CLIENT_STATUSES.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
+            </option>
+          ))}
+        </Select>
+        <Select name="tag" defaultValue={tag} aria-label="Tag">
+          <option value="">All tags</option>
+          {(tags ?? []).map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
             </option>
           ))}
         </Select>

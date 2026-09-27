@@ -7,6 +7,7 @@ import { PROJECT_PLATFORMS, PROJECT_STATUSES, REQUEST_STATUS_TONE, labelOf } fro
 import { signPaths } from "@/lib/uploads";
 import { formatDate, humanize } from "@/lib/utils";
 import { deleteAttachmentAction, deleteProjectAction } from "../actions";
+import { formatCustomValue, type CustomFieldDef } from "@/lib/custom-fields";
 import { AttachmentForm } from "./attachment-form";
 
 export default async function ProjectDetailPage({ params }: PageProps<"/admin/projects/[id]">) {
@@ -15,10 +16,12 @@ export default async function ProjectDetailPage({ params }: PageProps<"/admin/pr
   const { data: project } = await supabase.from("projects").select("*, clients(id, name)").eq("id", id).maybeSingle();
   if (!project) notFound();
 
-  const [{ data: requests }, { data: attachments }] = await Promise.all([
+  const [{ data: requests }, { data: attachments }, { data: customDefs }] = await Promise.all([
     supabase.from("requests").select("id, status, created_at, submitted_at").eq("project_id", id).order("created_at", { ascending: false }),
     supabase.from("attachments").select("id, file_url, file_name, mime_type, created_at").eq("owner_type", "project").eq("owner_id", id),
+    supabase.from("settings_custom_fields").select("id, entity, key, label, type, options").eq("entity", "project").order("created_at"),
   ]);
+  const custom = (project.custom_fields ?? {}) as Record<string, unknown>;
   const sign = await signPaths(supabase, (attachments ?? []).map((a) => a.file_url));
   const client = project.clients as unknown as { id: string; name: string };
   const links = (project.links ?? []) as { label: string; url: string }[];
@@ -65,6 +68,9 @@ export default async function ProjectDetailPage({ params }: PageProps<"/admin/pr
                   ["Budget (private)", money],
                   ["Start", formatDate(project.start_date)],
                   ["End", formatDate(project.end_date)],
+                  ...((customDefs ?? []) as CustomFieldDef[]).map(
+                    (d) => [d.label, formatCustomValue(d, custom[d.key])] as [string, React.ReactNode],
+                  ),
                 ]}
               />
               {project.description && <Section title="Description">{project.description}</Section>}

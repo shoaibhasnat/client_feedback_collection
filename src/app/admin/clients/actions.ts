@@ -7,6 +7,29 @@ import { assertWritable } from "@/lib/auth";
 import { logActivity } from "@/lib/audit";
 import { removeFolder, storeImage, UploadError } from "@/lib/uploads";
 import { nullIfEmpty } from "@/lib/utils";
+import { parseCustomFields, type CustomFieldDef } from "@/lib/custom-fields";
+import { pickTagIds } from "@/lib/tags";
+
+type Ctx = Awaited<ReturnType<typeof assertWritable>>;
+
+/** Custom field values + tag ids from the client form, validated against this workspace's definitions. */
+async function readExtras(ctx: Ctx, formData: FormData, existingCustom: Record<string, unknown> | null) {
+  const [{ data: defs }, { data: tags }] = await Promise.all([
+    ctx.supabase.from("settings_custom_fields").select("id, entity, key, label, type, options").eq("entity", "client"),
+    ctx.supabase.from("tags").select("id"),
+  ]);
+  const custom = parseCustomFields(formData, (defs ?? []) as CustomFieldDef[], existingCustom);
+  return { custom, tagIds: pickTagIds(formData, tags ?? []) };
+}
+
+async function syncClientTags(ctx: Ctx, clientId: string, tagIds: string[]) {
+  await ctx.supabase.from("client_tags").delete().eq("client_id", clientId);
+  if (tagIds.length) {
+    await ctx.supabase
+      .from("client_tags")
+      .insert(tagIds.map((tag_id) => ({ workspace_id: ctx.workspace.id, client_id: clientId, tag_id })));
+  }
+}
 
 export type FormState = { error?: string; fieldErrors?: Record<string, string>; ok?: boolean };
 
@@ -103,10 +126,14 @@ export async function createClientAction(_prev: FormState, formData: FormData): 
   const ctx = await assertWritable();
   const parsed = parseClient(formData);
   if ("error" in parsed) return parsed;
+  const extras = await readExtras(ctx, formData, null);
+  if (Object.keys(extras.custom.errors).length) {
+    return { error: "Check the highlighted fields.", fieldErrors: extras.custom.errors };
+  }
 
   const { data: client, error } = await ctx.supabase
     .from("clients")
-    .insert({ ...parsed.data, workspace_id: ctx.workspace.id })
+    .insert({ ...parsed.data, custom_fields: extras.custom.values, workspace_id: ctx.workspace.id })
     .select("id")
     .single();
   if (error) return { error: error.message };
@@ -123,6 +150,7 @@ export async function createClientAction(_prev: FormState, formData: FormData): 
   const note = nullIfEmpty(formData.get("initial_note"));
   if (note) await ctx.supabase.from("client_notes").insert({ workspace_id: ctx.workspace.id, client_id: client.id, body: note });
 
+  await syncClientTags(ctx, client.id, extras.tagIds);
   await logActivity(ctx.supabase, { workspaceId: ctx.workspace.id, clientId: client.id, entityType: "client", entityId: client.id, action: "created" });
   revalidatePath("/admin/clients");
   redirect(`/admin/clients/${client.id}`);
@@ -132,6 +160,11 @@ export async function updateClientAction(clientId: string, _prev: FormState, for
   const ctx = await assertWritable();
   const parsed = parseClient(formData);
   if ("error" in parsed) return parsed;
+  const { data: current } = await ctx.supabase.from("clients").select("custom_fields").eq("id", clientId).single();
+  const extras = await readExtras(ctx, formData, (current?.custom_fields ?? {}) as Record<string, unknown>);
+  if (Object.keys(extras.custom.errors).length) {
+    return { error: "Check the highlighted fields.", fieldErrors: extras.custom.errors };
+  }
   if (parsed.data.referred_by_client_id === clientId) {
     return { error: "A client can't refer themselves.", fieldErrors: { referred_by_client_id: "Pick another client." } };
   }
@@ -144,9 +177,13 @@ export async function updateClientAction(clientId: string, _prev: FormState, for
     throw e;
   }
 
-  const { error } = await ctx.supabase.from("clients").update({ ...parsed.data, ...images }).eq("id", clientId);
+  const { error } = await ctx.supabase
+    .from("clients")
+    .update({ ...parsed.data, ...images, custom_fields: extras.custom.values })
+    .eq("id", clientId);
   if (error) return { error: error.message };
 
+  await syncClientTags(ctx, clientId, extras.tagIds);
   await logActivity(ctx.supabase, { workspaceId: ctx.workspace.id, clientId, entityType: "client", entityId: clientId, action: "updated" });
   revalidatePath(`/admin/clients/${clientId}`);
   redirect(`/admin/clients/${clientId}`);

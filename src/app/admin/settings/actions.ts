@@ -6,6 +6,7 @@ import { assertWritable, requireOwner } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { storeImage, UploadError } from "@/lib/uploads";
 import { nullIfEmpty } from "@/lib/utils";
+import { cleanPresets } from "@/lib/form/settings";
 
 export type SettingsState = { error?: string; ok?: boolean };
 
@@ -90,5 +91,24 @@ export async function changePasswordAction(_prev: SettingsState, formData: FormD
   const { error } = await ctx.supabase.auth.updateUser({ password });
   if (error) return { error: error.message };
   await logAudit({ actorUserId: ctx.user.id, workspaceId: ctx.workspace.id, action: "auth.password_changed", targetType: "user", targetId: ctx.user.id });
+  return { ok: true };
+}
+
+export type PresetsResult = { ok: boolean; error?: string };
+
+/** Quick presets shown on the request "Customize form" step (brief §3.7). */
+export async function savePresetsAction(input: unknown): Promise<PresetsResult> {
+  const ctx = await assertWritable();
+  const presets = cleanPresets(input);
+  if (!Array.isArray(input) || presets.length !== input.length) return { ok: false, error: "Some presets are invalid." };
+  if (presets.some((p) => !p.name.trim())) return { ok: false, error: "Every preset needs a name." };
+  const ids = new Set<string>();
+  for (const p of presets) {
+    if (ids.has(p.id)) return { ok: false, error: "Preset ids must be unique." };
+    ids.add(p.id);
+  }
+  const { error } = await ctx.supabase.from("site_settings").update({ form_presets: presets }).eq("workspace_id", ctx.workspace.id);
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/admin/settings/messages");
   return { ok: true };
 }
