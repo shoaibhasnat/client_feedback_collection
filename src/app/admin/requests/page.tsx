@@ -4,12 +4,18 @@ import { Badge, EmptyState, LinkButton, PageHeader, Table, Td, Th } from "@/comp
 import { requireOwner } from "@/lib/auth";
 import { REQUEST_STATUS_TONE } from "@/lib/constants";
 import { cn, formatDate, humanize } from "@/lib/utils";
+import { needsReminderFilter } from "@/lib/requests";
 
 export const metadata: Metadata = { title: "Requests" };
+
+function daysAgoIso(days: number) {
+  return new Date(Date.now() - days * 86_400_000).toISOString();
+}
 
 const FILTERS = [
   { key: "", label: "All" },
   { key: "open", label: "Awaiting response" },
+  { key: "remind", label: "Needs a reminder" },
   { key: "submitted", label: "To review" },
   { key: "done", label: "Done" },
   { key: "revoked", label: "Revoked" },
@@ -18,7 +24,7 @@ const FILTERS = [
 export default async function RequestsPage({ searchParams }: PageProps<"/admin/requests">) {
   const sp = await searchParams;
   const filter = typeof sp.filter === "string" ? sp.filter : "";
-  const { supabase, readOnly } = await requireOwner();
+  const { supabase, workspace, readOnly } = await requireOwner();
 
   let query = supabase
     .from("requests")
@@ -26,6 +32,11 @@ export default async function RequestsPage({ searchParams }: PageProps<"/admin/r
     .order("created_at", { ascending: false })
     .limit(500);
   if (filter === "open") query = query.in("status", ["draft", "sent", "opened", "in_progress"]).is("revoked_at", null);
+  if (filter === "remind") {
+    const { data: settings } = await supabase.from("site_settings").select("message_templates").eq("workspace_id", workspace.id).single();
+    const days = Number((settings?.message_templates as Record<string, unknown> | null)?.reminder_days ?? 3);
+    query = query.in("status", ["sent", "opened", "in_progress"]).is("revoked_at", null).or(needsReminderFilter(daysAgoIso(days)));
+  }
   if (filter === "submitted") query = query.eq("status", "submitted");
   if (filter === "done") query = query.in("status", ["reviewed", "published", "private"]);
   if (filter === "revoked") query = query.not("revoked_at", "is", null);

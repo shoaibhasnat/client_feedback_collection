@@ -42,7 +42,7 @@ export const SECTION_LABELS: Record<SectionId, string> = {
   cta: "Call-to-action footer",
 };
 
-export const CARD_FIELDS = ["headline", "rating", "name", "role", "company", "photo", "logo", "platform", "date"] as const;
+export const CARD_FIELDS = ["headline", "rating", "name", "role", "company", "photo", "logo", "platform", "date", "video"] as const;
 export type CardField = (typeof CARD_FIELDS)[number];
 
 // ---------- Defaults -------------------------------------------------------

@@ -103,6 +103,14 @@ export async function insertRequest(
   return { id: data.id as string, warnings };
 }
 
+/**
+ * PostgREST filter for sent requests that need a nudge: nothing heard since `before`, counting
+ * from the last reminder if there was one, otherwise from when the link was sent.
+ */
+export function needsReminderFilter(before: string): string {
+  return `last_reminded_at.lt.${before},and(last_reminded_at.is.null,sent_at.lt.${before})`;
+}
+
 export type MessageKind = "upwork" | "email" | "whatsapp" | "reminder";
 
 export function buildMessage(

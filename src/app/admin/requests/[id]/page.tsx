@@ -115,6 +115,7 @@ export default async function RequestDetailPage({ params, searchParams }: PagePr
             messages={messages}
             disabled={Boolean(req.revoked_at) || readOnly}
             isDraft={req.status === "draft"}
+            canRemind={!req.submitted_at && !req.revoked_at && req.status !== "draft"}
           />
 
           <Card>

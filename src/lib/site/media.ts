@@ -31,6 +31,21 @@ export async function streamPublicFile(resolve: (anon: ReturnType<typeof anonCli
   });
 }
 
+/**
+ * Same checks as streamPublicFile, but answers with a 302 to a signed URL that expires in 10 minutes.
+ * The redirect itself is never cached, so unpublishing stops new plays immediately.
+ */
+export async function redirectToPublicFile(resolve: (anon: ReturnType<typeof anonClient>) => Promise<string | null>) {
+  const path = await resolve(anonClient());
+  if (!path) return notFound();
+  const { data } = await createAdminClient().storage.from("uploads").createSignedUrl(path, 600);
+  if (!data?.signedUrl) return notFound();
+  return new Response(null, {
+    status: 302,
+    headers: { Location: data.signedUrl, "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer" },
+  });
+}
+
 function anonClient() {
   return createClient(env.supabaseUrl, env.supabaseAnonKey, { auth: { persistSession: false }, ...realtimeOptions });
 }

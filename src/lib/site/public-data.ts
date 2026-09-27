@@ -37,7 +37,7 @@ export async function getPublicWorkspace(slug: string): Promise<PublicWorkspace 
   )();
 }
 
-const mediaUrl = (id: string, version: number, kind: "photo" | "logo") => `/api/public/media/${id}/${version}/${kind}`;
+const mediaUrl = (id: string, version: number, kind: "photo" | "logo" | "video" | "video_thumb") => `/api/public/media/${id}/${version}/${kind}`;
 const brandUrl = (workspaceId: string, version: number, kind: string) => `/api/public/brand/${workspaceId}/${version}/${kind}`;
 
 type RawTestimonial = {
@@ -52,6 +52,8 @@ type RawTestimonial = {
   platform: string | null;
   has_photo: boolean;
   has_logo: boolean;
+  has_video: boolean;
+  has_video_thumb: boolean;
   featured: boolean;
   sort_order: number;
   tag_ids: string[];
@@ -91,6 +93,8 @@ export async function getPublicSite(workspace: PublicWorkspace): Promise<PublicS
         platform: t.platform,
         photo: t.has_photo ? mediaUrl(t.id, t.version, "photo") : null,
         logo: t.has_logo ? mediaUrl(t.id, t.version, "logo") : null,
+        video: t.has_video ? mediaUrl(t.id, t.version, "video") : null,
+        videoThumb: t.has_video && t.has_video_thumb ? mediaUrl(t.id, t.version, "video_thumb") : null,
         featured: t.featured,
         tagIds: t.tag_ids ?? [],
       }));

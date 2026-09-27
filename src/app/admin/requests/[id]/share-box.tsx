@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Card, CardHeader } from "@/components/ui";
 import { CopyButton } from "@/components/ui/client";
 import { cn } from "@/lib/utils";
-import { markSentAction } from "../actions";
+import { markRemindedAction, markSentAction } from "../actions";
 
 const TABS = [
   { key: "upwork", label: "Upwork chat" },
@@ -19,16 +19,25 @@ export function ShareBox({
   messages,
   disabled,
   isDraft,
+  canRemind = false,
 }: {
   requestId: string;
   link: string;
   messages: Record<(typeof TABS)[number]["key"], string>;
   disabled: boolean;
   isDraft: boolean;
+  /** Sent, not yet submitted: copying the reminder message records the reminder. */
+  canRemind?: boolean;
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("upwork");
   const onCopy = () => {
     if (isDraft && !disabled) void markSentAction(requestId);
+  };
+  const [reminded, setReminded] = useState(false);
+  const onCopyReminder = () => {
+    if (!canRemind || disabled || reminded) return;
+    setReminded(true);
+    void markRemindedAction(requestId);
   };
 
   return (
@@ -63,8 +72,10 @@ export function ShareBox({
           <div role="tabpanel" className="rounded-lg border border-slate-200 bg-slate-50 p-4">
             <p className="whitespace-pre-wrap text-sm text-slate-800">{messages[tab]}</p>
             <div className="mt-3 flex items-center justify-between gap-3">
-              <p className="text-xs text-slate-500">Edit these templates in Site &amp; Settings.</p>
-              <span onClickCapture={tab === "reminder" ? undefined : onCopy}>
+              <p className="text-xs text-slate-500">
+                {tab === "reminder" && canRemind ? "Copying marks the request as reminded today." : "Edit these templates in Site & Settings."}
+              </p>
+              <span onClickCapture={tab === "reminder" ? onCopyReminder : onCopy}>
                 <CopyButton text={messages[tab]} label="Copy message" />
               </span>
             </div>

@@ -67,7 +67,7 @@ describe("layout & SEO parsing", () => {
 
 describe("filtering and structured data", () => {
   const t = (id: string, quote: string, tagIds: string[] = []): PublicTestimonial => ({
-    id, quote, headline: null, name: "Ada", role: null, company: "Acme", rating: 5, date: "2026-01-01", platform: null, photo: null, logo: null, featured: false, tagIds,
+    id, quote, headline: null, name: "Ada", role: null, company: "Acme", rating: 5, date: "2026-01-01", platform: null, photo: null, logo: null, video: null, videoThumb: null, featured: false, tagIds,
   });
   const list = [t("1", "Fast Shopify store", ["tag-shop"]), t("2", "Great SEO work")];
   const tags = [{ id: "tag-shop", name: "Shopify Plus", type: "platform", color: null }];

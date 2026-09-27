@@ -15,6 +15,8 @@ export type PublicTestimonial = {
   platform: string | null;
   photo: string | null; // media route URL
   logo: string | null; // media route URL
+  video: string | null; // media route URL (redirects to a short-lived signed URL)
+  videoThumb: string | null; // media route URL
   featured: boolean;
   tagIds: string[];
 };

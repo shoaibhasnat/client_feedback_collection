@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { CardField, LayoutConfig, ThemeConfig } from "@/lib/site/config";
 import { themeCss } from "@/lib/site/config";
 import { fontStack } from "@/lib/site/fonts";
+import { VideoLightbox } from "@/components/site/video-lightbox";
 import type { PublicSite, PublicTag, PublicTestimonial } from "@/lib/site/types";
 
 // Presentational components for the public wall, collections and single-testimonial pages.
@@ -91,6 +92,9 @@ export function TestimonialCard({
         <h3 className="text-[1.05em] font-semibold leading-snug" style={{ fontFamily: "var(--site-font-heading)" }}>
           {t.headline}
         </h3>
+      )}
+      {fields.video && t.video && (
+        <VideoLightbox video={t.video} thumb={t.videoThumb} label={t.name ? `Video testimonial from ${t.name}` : "Video testimonial"} />
       )}
       {fields.rating && t.rating ? <Stars rating={t.rating} /> : null}
       <blockquote className={cx("leading-relaxed", size === "large" && "text-[1.15em]")}>

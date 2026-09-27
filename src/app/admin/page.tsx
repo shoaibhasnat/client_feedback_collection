@@ -3,6 +3,7 @@ import { CheckCircle2, Circle } from "lucide-react";
 import { Alert, Card, CardHeader, LinkButton, PageHeader } from "@/components/ui";
 import { requireOwner } from "@/lib/auth";
 import { formatDate } from "@/lib/utils";
+import { needsReminderFilter } from "@/lib/requests";
 
 function daysAgoIso(days: number) {
   return new Date(Date.now() - days * 86_400_000).toISOString();
@@ -20,7 +21,7 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
   const reminderDays = Number((settings?.message_templates as Record<string, unknown>)?.reminder_days ?? 3);
   const staleBefore = daysAgoIso(reminderDays);
 
-  const [testimonials, published, awaiting, submitted, stale, ratings, clientCount, requestCount] = await Promise.all([
+  const [testimonials, published, awaiting, submitted, stale, ratings, clientCount, requestCount, approvals] = await Promise.all([
     supabase.from("testimonials").select("id", { count: "exact", head: true }),
     supabase.from("testimonials").select("id", { count: "exact", head: true }).eq("visibility", "published"),
     supabase.from("requests").select("id", { count: "exact", head: true }).in("status", ["sent", "opened", "in_progress"]).is("revoked_at", null),
@@ -35,12 +36,18 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
       .select("id, sent_at, last_reminded_at, status, clients(name)")
       .in("status", ["sent", "opened", "in_progress"])
       .is("revoked_at", null)
-      .lt("sent_at", staleBefore)
+      .or(needsReminderFilter(staleBefore))
       .order("sent_at", { ascending: true })
       .limit(10),
     supabase.from("submissions").select("rating").not("submitted_at", "is", null).not("rating", "is", null),
     supabase.from("clients").select("id", { count: "exact", head: true }),
     supabase.from("requests").select("id", { count: "exact", head: true }),
+    supabase
+      .from("testimonials")
+      .select("id, submission_id, approval_status, approval_requested_at, approval_responded_at, clients(name)")
+      .in("approval_status", ["pending", "changes_requested"])
+      .order("approval_requested_at", { ascending: true })
+      .limit(10),
   ]);
 
   const ratingValues = (ratings.data ?? []).map((r) => r.rating as number);
@@ -149,7 +156,17 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
         </Card>
 
         <Card>
-          <CardHeader title={`No response after ${reminderDays} days`} description="Copy a reminder message from the request page." />
+          <CardHeader
+            title={`No response after ${reminderDays} days`}
+            description={
+              <>
+                Copy a reminder message from the request page.{" "}
+                <Link href="/admin/requests?filter=remind" className="underline">
+                  See all
+                </Link>
+              </>
+            }
+          />
           <ul className="divide-y divide-slate-100">
             {(stale.data ?? []).map((r) => (
               <li key={r.id}>
@@ -165,6 +182,29 @@ export default async function AdminHome({ searchParams }: PageProps<"/admin">) {
             {!stale.data?.length && <li className="px-5 py-4 text-sm text-slate-500">All caught up.</li>}
           </ul>
         </Card>
+
+        {Boolean(approvals.data?.length) && (
+          <Card>
+            <CardHeader title="Client approvals" description="Edited quotes you asked clients to check." />
+            <ul className="divide-y divide-slate-100">
+              {(approvals.data ?? []).map((t) => (
+                <li key={t.id}>
+                  <Link
+                    href={t.submission_id ? `/admin/testimonials/review/${t.submission_id}#approval` : `/admin/testimonials/${t.id}`}
+                    className="flex items-center justify-between gap-3 px-5 py-3 text-sm hover:bg-slate-50"
+                  >
+                    <span className="font-medium text-slate-900">{(t.clients as unknown as { name: string } | null)?.name ?? "Client"}</span>
+                    <span className={t.approval_status === "changes_requested" ? "text-xs font-medium text-red-700" : "text-xs text-slate-500"}>
+                      {t.approval_status === "changes_requested"
+                        ? `Changes suggested ${formatDate(t.approval_responded_at)}`
+                        : `Awaiting approval since ${formatDate(t.approval_requested_at)}`}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
       </div>
     </>
   );
