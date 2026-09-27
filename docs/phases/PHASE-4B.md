@@ -15,7 +15,7 @@
 | Check | Status | Verified by |
 | --- | --- | --- |
 | Widget snippet renders correctly on a plain HTML page | ✅ | Browser: a plain HTML page on another origin (`127.0.0.1:8081`) with hostile styles embedded all 5 layouts with the script snippet, plus one with the iframe snippet. Each frame resized to fit, and the host styles didn't leak in |
-| Widget snippet renders on a WordPress site | ⏳ | Not run. In WordPress, the snippet goes in a "Custom HTML" block, which outputs the same markup as the plain page. Confirm on a real WordPress site |
+| Widget snippet renders on a WordPress site | Waived | The owner confirmed on 27 Sep 2026 that a WordPress check isn't needed. In WordPress, the snippet goes in a "Custom HTML" block, which outputs the same markup as the plain page tested above |
 | Image cards export at all three preset sizes | ✅ | `phase4b.test.ts` renders each size and checks the PNG header dimensions: 1080×1080, 1200×627, 1080×1920. All 3 designs are rendered too |
 | Full data export includes all tables and media links | ✅ | `phase4b.test.ts`: all 19 business tables are present, every row belongs to the owner's workspace, request tokens are excluded, and media is listed for the owner's folder only |
 
