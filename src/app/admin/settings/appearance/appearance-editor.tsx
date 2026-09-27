@@ -15,6 +15,8 @@ import {
   SECTION_LABELS,
   THEME_PRESETS,
   applyThemePreset,
+  CUSTOM_CSS_MAX,
+  customCssProblem,
   type LayoutConfig,
   type Palette,
   type SeoConfig,
@@ -187,7 +189,7 @@ export function AppearanceEditor({
             {usingSamples && <p className="border-b border-slate-100 bg-amber-50 px-4 py-2 text-xs text-amber-900">Showing sample testimonials until you publish some.</p>}
             <div className="overflow-auto bg-slate-100 p-3" style={{ maxHeight: 760 }}>
               <div className={cn("mx-auto overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm", device === "mobile" ? "w-[375px] max-w-full" : "w-full")}>
-                <SiteFrame theme={draft.theme}>
+                <SiteFrame theme={draft.theme} customCss>
                   <PublicWall site={previewSite} list={previewSite.testimonials} activeTag={null} q="" basePath="#" mode="preview" />
                 </SiteFrame>
               </div>
@@ -344,6 +346,37 @@ function ThemeTab({
               <option value="comfortable">Comfortable</option>
             </Select>
           </Field>
+        </div>
+      </Card>
+      <Card>
+        <CardHeader
+          title="Custom CSS"
+          description="Applied last, only on your public pages (not the form or widgets). Rules are scoped to your page. Handy hooks: .tc-card (each testimonial) and .tc-quote (its text)."
+        />
+        <div className="space-y-2 p-4">
+          <label htmlFor="custom-css" className="sr-only">
+            Custom CSS
+          </label>
+          <textarea
+            id="custom-css"
+            value={theme.custom_css}
+            maxLength={CUSTOM_CSS_MAX}
+            rows={8}
+            spellCheck={false}
+            onChange={(e) => {
+              const custom_css = e.target.value;
+              setDraft((d) => ({ ...d, theme: { ...d.theme, custom_css } }));
+            }}
+            className="w-full rounded-lg border border-slate-300 bg-slate-950 p-3 font-mono text-xs text-slate-100 focus:border-blue-600 focus:outline-none"
+            placeholder={".tc-card { border-width: 2px; }\n.tc-quote { font-style: italic; }"}
+          />
+          {customCssProblem(theme.custom_css) ? (
+            <p className="text-xs text-red-600">{customCssProblem(theme.custom_css)}</p>
+          ) : (
+            <p className="text-xs text-slate-500">
+              {theme.custom_css.length.toLocaleString("en")} / {CUSTOM_CSS_MAX.toLocaleString("en")} characters. @import, script URLs and “&lt;” aren&apos;t allowed.
+            </p>
+          )}
         </div>
       </Card>
     </>

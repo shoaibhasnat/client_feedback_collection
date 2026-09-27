@@ -42,7 +42,7 @@ export default async function WallPage({ params, searchParams }: PageProps<"/[sl
   const list = filterTestimonials(site.testimonials, { tag: activeTag?.id ?? (tagParam ? "__none__" : null), q });
 
   return (
-    <SiteFrame theme={site.theme}>
+    <SiteFrame theme={site.theme} customCss>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: reviewJsonLd(site, list, `/${site.workspace.slug}`) }} />
       <PublicWall site={site} list={list} activeTag={activeTag} q={q} basePath={`/${site.workspace.slug}`} />
       <SiteAnalytics seo={site.seo} />

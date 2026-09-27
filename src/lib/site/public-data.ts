@@ -166,3 +166,27 @@ export function resolveTag(tags: PublicTag[], value: string | null | undefined):
   const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   return tags.find((t) => t.id === v || t.name.toLowerCase() === v || slug(t.name) === slug(v)) ?? null;
 }
+
+export type PublicWidget = {
+  workspace: PublicWorkspace;
+  config: unknown;
+  collection_ids: string[] | null;
+};
+
+export const widgetTag = (widgetId: string) => `widget:${widgetId}`;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const KEY_RE = /^[0-9a-f]{32}$/;
+
+/** A widget by its workspace public key + widget id (brief §10.6), or null. */
+export async function getPublicWidget(publicKey: string, widgetId: string): Promise<PublicWidget | null> {
+  if (!KEY_RE.test(publicKey) || !UUID_RE.test(widgetId)) return null;
+  return unstable_cache(
+    async () => {
+      const { data } = await anon().rpc("public_widget", { p_key: publicKey, p_widget: widgetId });
+      return (data as PublicWidget | null) ?? null;
+    },
+    ["public-widget", publicKey, widgetId],
+    { tags: [widgetTag(widgetId)], revalidate: 300 },
+  )();
+}

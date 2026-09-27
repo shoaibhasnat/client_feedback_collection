@@ -6,7 +6,7 @@ import { z } from "zod";
 import { assertWritable } from "@/lib/auth";
 import { randomToken } from "@/lib/crypto";
 import { revalidateSite } from "@/lib/site/cache";
-import { parseLayout, parseSeo, parseTheme, type LayoutConfig, type SeoConfig, type ThemeConfig } from "@/lib/site/config";
+import { customCssProblem, parseLayout, parseSeo, parseTheme, type LayoutConfig, type SeoConfig, type ThemeConfig } from "@/lib/site/config";
 import { IMAGE_TYPES, MAX_IMAGE_BYTES } from "@/lib/uploads";
 
 export type AppearanceResult = { ok: boolean; error?: string; url?: string | null };
@@ -44,6 +44,9 @@ export async function saveAppearanceAction(input: { theme: ThemeConfig; layout: 
   const analytics = input.seo?.analytics;
   if (analytics?.provider === "plausible" && !/^[a-z0-9.-]{3,100}$/i.test(analytics.id)) return { ok: false, error: "Enter your Plausible site domain, e.g. example.com" };
   if (analytics?.provider === "google" && !/^G-[A-Z0-9]{4,20}$/.test(analytics.id)) return { ok: false, error: "Enter a Google Analytics measurement ID like G-ABC123XYZ." };
+
+  const cssProblem = customCssProblem(String(input.theme?.custom_css ?? ""));
+  if (cssProblem) return { ok: false, error: cssProblem };
 
   const theme = parseTheme({
     ...input.theme,

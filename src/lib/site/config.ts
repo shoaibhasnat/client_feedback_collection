@@ -5,6 +5,7 @@ import { z } from "zod";
 // older stored value never breaks the public page.
 
 const hex = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+export const CUSTOM_CSS_MAX = 20_000;
 
 export const PALETTE_KEYS = ["primary", "accent", "background", "surface", "text", "muted", "border"] as const;
 export type PaletteKey = (typeof PALETTE_KEYS)[number];
@@ -100,8 +101,45 @@ export const themeSchema = z.object({
       background_image: z.string().max(500).nullable().catch(null),
     })
     .catch({ background_image: null }),
+  /** Owner's own CSS, applied last and scoped to public pages (brief §6 Advanced). Checked on save. */
+  custom_css: z.string().max(CUSTOM_CSS_MAX).catch(""),
 });
 export type ThemeConfig = z.infer<typeof themeSchema>;
+
+/**
+ * Why custom CSS can't be saved, or null if it's fine. The CSS lives inside a <style> element on a
+ * public page, so anything that could end the element, load remote code or run script is refused.
+ * url() is allowed only for https:// and data:image/ (fonts, background images).
+ */
+export function customCssProblem(css: string): string | null {
+  if (css.length > CUSTOM_CSS_MAX) return `Custom CSS can be at most ${CUSTOM_CSS_MAX.toLocaleString("en")} characters.`;
+  if (css.includes("<")) return "Custom CSS can't contain “<”.";
+  // CSS escapes (e.g. "\40 import") could smuggle the blocked words past the checks below.
+  if (css.includes("\\")) return "Backslashes aren't allowed in custom CSS.";
+  const lower = css.toLowerCase();
+  if (lower.includes("@import")) return "@import isn't allowed. Add fonts from the Typography settings instead.";
+  if (/expression\s*\(|javascript:|vbscript:|behavior\s*:|-moz-binding/.test(lower)) return "That CSS feature isn't allowed.";
+  const urls = lower.match(/url\s*\(\s*(['"]?)([^'")]*)/g) ?? [];
+  for (const u of urls) {
+    const target = u.replace(/^url\s*\(\s*['"]?/, "").trim();
+    if (!/^(https:\/\/|data:image\/)/.test(target)) return "url() must point to an https:// address.";
+  }
+  let depth = 0;
+  for (const ch of css) {
+    if (ch === "{") depth += 1;
+    if (ch === "}") depth -= 1;
+    if (depth < 0) return "Custom CSS has an unmatched “}”.";
+  }
+  if (depth !== 0) return "Custom CSS has an unmatched “{”.";
+  return null;
+}
+
+/** Custom CSS nested under the site's root class, so it can't restyle anything outside the public page. */
+export function scopedCustomCss(css: string, scope: string): string {
+  const clean = css.trim();
+  if (!clean || customCssProblem(clean)) return "";
+  return `${scope}{${clean}}`;
+}
 
 const contentSchema = z.object({
   hero_title: z.string().max(160).catch(""),

@@ -15,3 +15,8 @@ export function revalidatePublicWorkspaces(workspaceId?: string) {
   revalidateTag(PUBLIC_WORKSPACES_TAG, { expire: 0 });
   if (workspaceId) revalidateSite(workspaceId);
 }
+
+/** Widget configs are cached per widget; saving one invalidates its embeds. */
+export function revalidateWidget(widgetId: string) {
+  revalidateTag(`widget:${widgetId}`, { expire: 0 });
+}

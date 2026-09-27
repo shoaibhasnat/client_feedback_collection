@@ -1,7 +1,7 @@
 import NextImage from "next/image";
 import type { CSSProperties, ReactNode } from "react";
 import type { CardField, LayoutConfig, ThemeConfig } from "@/lib/site/config";
-import { themeCss } from "@/lib/site/config";
+import { scopedCustomCss, themeCss } from "@/lib/site/config";
 import { fontStack } from "@/lib/site/fonts";
 import { VideoLightbox } from "@/components/site/video-lightbox";
 import type { PublicSite, PublicTag, PublicTestimonial } from "@/lib/site/types";
@@ -31,7 +31,19 @@ const PLATFORM_LABEL: Record<string, string> = { upwork: "Upwork", referral: "Re
 export type SiteLinkMode = "live" | "preview";
 
 /** Theme variables + fonts for one site, scoped to `.tc-site`. */
-export function SiteFrame({ theme, children, className }: { theme: ThemeConfig; children: ReactNode; className?: string }) {
+export function SiteFrame({
+  theme,
+  children,
+  className,
+  customCss = false,
+}: {
+  theme: ThemeConfig;
+  children: ReactNode;
+  className?: string;
+  /** Public pages apply the owner's custom CSS last; the widget and form don't. */
+  customCss?: boolean;
+}) {
+  const custom = customCss ? scopedCustomCss(theme.custom_css, ".tc-site") : "";
   return (
     <div
       className={cx("tc-site min-h-full bg-[var(--site-background)] text-[var(--site-text)]", className)}
@@ -40,6 +52,8 @@ export function SiteFrame({ theme, children, className }: { theme: ThemeConfig; 
       {/* Validated hex colours, enum values and self-hosted font stacks only — see themeCss(). */}
       <style dangerouslySetInnerHTML={{ __html: themeCss(theme, ".tc-site", fontStack) }} />
       {children}
+      {/* Checked on save and again here (customCssProblem): no "<", @import, script URLs or escapes. */}
+      {custom && <style dangerouslySetInnerHTML={{ __html: custom }} />}
     </div>
   );
 }
@@ -86,7 +100,7 @@ export function TestimonialCard({
 
   return (
     <article
-      className={cx("mb-[var(--site-gap)] flex break-inside-avoid flex-col gap-3 rounded-[var(--site-radius)] p-[var(--site-pad)]", cardStyle)}
+      className={cx("tc-card mb-[var(--site-gap)] flex break-inside-avoid flex-col gap-3 rounded-[var(--site-radius)] p-[var(--site-pad)]", cardStyle)}
     >
       {fields.headline && t.headline && (
         <h3 className="text-[1.05em] font-semibold leading-snug" style={{ fontFamily: "var(--site-font-heading)" }}>
@@ -97,7 +111,7 @@ export function TestimonialCard({
         <VideoLightbox video={t.video} thumb={t.videoThumb} label={t.name ? `Video testimonial from ${t.name}` : "Video testimonial"} />
       )}
       {fields.rating && t.rating ? <Stars rating={t.rating} /> : null}
-      <blockquote className={cx("leading-relaxed", size === "large" && "text-[1.15em]")}>
+      <blockquote className={cx("tc-quote leading-relaxed", size === "large" && "text-[1.15em]")}>
         <p className="whitespace-pre-line">“{t.quote}”</p>
       </blockquote>
       <footer className="mt-auto flex items-center gap-3 pt-2">

@@ -38,7 +38,7 @@ export default async function CollectionPage({ params }: PageProps<"/[slug]/c/[c
   const ctaHref = c.cta_url || site.profile.contactLinks[0] || "";
 
   return (
-    <SiteFrame theme={site.theme}>
+    <SiteFrame theme={site.theme} customCss>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: reviewJsonLd(site, list, `/${site.workspace.slug}/c/${data.collection.slug}`) }}

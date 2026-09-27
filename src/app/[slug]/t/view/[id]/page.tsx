@@ -41,7 +41,7 @@ export default async function TestimonialPage({ params }: PageProps<"/[slug]/t/v
   const ctaHref = c.cta_url || site.profile.contactLinks[0] || "";
 
   return (
-    <SiteFrame theme={site.theme}>
+    <SiteFrame theme={site.theme} customCss>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: reviewJsonLd(site, [testimonial], `/${site.workspace.slug}/t/view/${testimonial.id}`) }}
