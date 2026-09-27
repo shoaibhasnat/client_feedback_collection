@@ -146,7 +146,7 @@ export default async function TestimonialsPage({ searchParams }: PageProps<"/adm
           <option value="hidden">Hidden</option>
           <option value="private">Private</option>
         </Select>
-        <Button variant="outline">Apply</Button>
+        <Button variant="outline">Filter</Button>
       </form>
       {!rows.length ? (
         <EmptyState title={tagFilter || visFilter ? "No testimonials match." : "No testimonials yet."} />
