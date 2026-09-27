@@ -6,7 +6,7 @@
 | **Completed** | 29 Sep 2026 |
 | **Commits** | `5a55962` public API & public pages · `edd54be` collections, appearance editor, themed form, tests · `22c03a0` self-hosted fonts (performance) · docs |
 | **Brief sections** | §9 Phase 3, §5.1–5.2, §6, §8 (public data, performance), §10.2 (public routes), §10.5 (suspension), §10.6 (slug URLs) |
-| **Builds on** | [Phase 1](PHASE-1.md) · [Phase 2](PHASE-2.md) · [App guide](../APP.md) |
+| **Builds on** | [Phase 1](phase-1.md) · [Phase 2](phase-2.md) · [App guide](../architecture.md) |
 
 ---
 

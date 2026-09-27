@@ -1,160 +1,109 @@
-# Testimonial Collector — Phases 1–4 (Collect, Configure, Showcase, Extras)
+# Testimonial Collector
 
-A multi-tenant web app where independent businesses collect structured client testimonials,
-keep a lightweight CRM of clients and projects, and review submissions. Built from
-*Testimonial Collector App — Developer Brief* (Sep 27, 2026). This repository covers **Phases 1–4**.
+Collect structured client testimonials, keep a lightweight CRM of who you worked with, and show the
+best of it on a public page, an embeddable widget and shareable image cards.
 
-**Documentation:** [Application guide](docs/APP.md) (architecture, data model, security, conventions) ·
-[Phase 1 — Collect](docs/phases/PHASE-1.md) · [Phase 2 — Configure](docs/phases/PHASE-2.md) · [Phase 3 — Showcase](docs/phases/PHASE-3.md) · [Phase 4a — Video & approval](docs/phases/PHASE-4A.md) · [Phase 4b — Widget, cards, CSV](docs/phases/PHASE-4B.md) (scope, acceptance criteria, verification, handover).
+Multi-tenant from day one: each business gets an isolated **workspace**, enforced by Postgres Row Level
+Security. Built with **Next.js 16** and **Supabase**, and runs on free tiers.
 
-**Stack:** Next.js 16 (App Router, TypeScript) · Supabase (Postgres, Auth, Storage, Row Level Security) ·
-Tailwind CSS 4 · Zod · sharp · Vitest.
+[Getting started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [Extending](docs/extending.md) ·
+[Deployment](docs/deployment.md) · [Testing](docs/testing.md) · [Contributing](CONTRIBUTING.md)
 
-## What's in Phase 1
+---
 
-| Area | Included |
-| --- | --- |
-| Multi-tenancy | `workspace_id` on every business table, RLS on every table, composite foreign keys so rows can't reference another workspace, `workspace_id` immutable, storage scoped to `{workspace_id}/…` |
-| Accounts | Super admin seeded by script; public sign-up disabled; single-use invite links (hashed, 7-day default expiry); sign-in, sign-out, password reset via Supabase's built-in email; sign-ins audited |
-| Super admin (`/superadmin`) | Create workspace + invite owner, regenerate/revoke invites, rename/change slug, suspend/reactivate, users list (disable/enable, force password reset, 2FA status), invites list, audit log, global settings (app name, invite expiry, announcement banner). Metadata and counts only, never business data |
-| Owner dashboard (`/admin`) | Home (counts, needs attention, onboarding checklist), clients CRUD with full profile + timestamped notes + activity timeline + "right to be forgotten" delete, projects CRUD with attachments, requests, submissions inbox, testimonial editing, settings (profile, message templates, change password) |
-| Requests | Pick client/project/template, live preview (screens, time, missing-prefill warnings), personal message, optional expiry; 192-bit token link; copy link / ready-made Upwork, email, WhatsApp and reminder messages; status pipeline with timestamps; reopen, revoke, duplicate, mark reminded |
-| Client form (`/t/{token}`) | Mobile-first multi-step flow rendered entirely from the request's template snapshot: welcome, rating, one question per screen, About you (with photo/logo upload, server-side crop and EXIF strip), Contact (private), Consent, Thank you with CTA. Autosave after each step, resume later, back button, honeypot, rate limits, "already submitted" state |
-| Review | Inbox of submissions; raw answers on the left (click a sentence to add it to the quote), editable showcase testimonial on the right with a character counter; publish/hidden/private; consent guard blocks publishing beyond what the client agreed to; side-by-side merge of About you / Contact answers into the client profile |
-| Seed | Each new workspace gets the default "Standard" template (5 questions, 7 About you fields, 4 Contact fields), message templates and a theme preset |
+## Features
 
-## What's in Phase 2
+**Collect**
+- Private request links (`/t/{token}`) open a guided, mobile-first form. It asks one question per screen, saves after every step and can be resumed.
+- Clients can record a video in the browser or upload one, choose a star rating, and pick exactly how much of their name, photo and company you may show (Full, Partial, Anonymous or Private).
+- A form builder with multiple templates and custom fields. Every field can be shown or hidden, made required or optional, and prefilled per client or per request.
+- Ready-made messages to paste into Upwork, email or WhatsApp. The app sends no email itself, apart from password resets.
 
-| Area | Included |
-| --- | --- |
-| Form builder (`/admin/forms`) | Multiple templates (create, duplicate, rename, default, archive); questions, About you and Contact fields with add/edit, drag-and-drop reorder (mouse + keyboard), archive/restore, prefill defaults and client-property mapping; rating/consent/thank-you settings; every client-facing string editable; live mobile/desktop preview |
-| Per-request & per-client settings | "Customize form" step: show/hide, required/optional, prefill (client, project, custom value) and lock for every item plus rating and consent; quick presets; save as client defaults; preview built from the exact snapshot the request stores. Client "Form preferences" page |
-| Custom fields | Owner-defined client and project fields (text, number, date, dropdown, URL) on forms, detail pages and as prefill/merge targets |
-| Tags | Create, edit, merge, delete; tag clients and testimonials; filters; bulk publish/hide/private/tag/untag/delete |
-| Consent & integrity | Enforced in Postgres: consent read from the submission, no publishing beyond it, withdrawal unpublishes, owners can't edit submissions, frozen request snapshots, media must be workspace files |
+**Manage**
+- A client and project CRM with notes, tags, an activity timeline and custom fields. Clients can be imported and exported as CSV.
+- A review inbox shows the client's original words next to the quote you're editing. Click a sentence to add it to the quote.
+- Client approval: send an approval link so the client can confirm or correct your edited wording.
+- Consent is enforced in the database, so nothing can be published beyond what the client agreed to.
 
-## What's in Phase 3
+**Showcase**
+- A themed public wall at `/{slug}` with featured testimonials, tag filters, search, collections and single-testimonial pages with Open Graph cards.
+- An appearance editor: presets, light and dark palettes, fonts, section order, all text, custom CSS and version history.
+- An **embeddable widget** with 5 layouts: grid, carousel, single card, scrolling wall and rating badge. It's added with a copy-paste script or iframe.
+- **Image cards**: any testimonial as a PNG for Instagram, LinkedIn or stories.
+- A full data export (JSON, CSV and media) for every workspace.
 
-| Area | Included |
-| --- | --- |
-| Public wall (`/{slug}`) | Themed page: hero with stats and CTA, featured, all testimonials (grid/masonry) with tag chips and search in the URL, about, services, client logos, CTA footer — order and visibility set by the owner |
-| Links | `/{slug}?tag=…`, collections at `/{slug}/c/{collection}` (managed in `/admin/collections`), single testimonials at `/{slug}/t/view/{id}` with Open Graph cards |
-| Appearance editor | Presets, light/dark palettes, curated self-hosted fonts, shape, sections, card fields, all public copy, logos/favicon/share image/form background, SEO, allowlisted analytics, last-10 version history; live preview |
-| Privacy & performance | Public pages read only through anon `public_*` SQL functions (tested: no private data in any output); Lighthouse mobile 94–96 |
+**Operate**
+- A super admin panel for workspaces, invite links, users, suspension and an audit log. It shows metadata only, never business data.
+- Invite-only accounts; public sign-up is disabled.
 
-## What's in Phase 4a
+## Quick start
 
-| Area | Included |
-| --- | --- |
-| Video | Optional/required video step on the client form: record in the browser (countdown, prompts, auto-stop) or upload; background upload with progress; resume. Owner can play, **download** (dashboard only) and choose to show it on the wall with a custom thumbnail; Full consent required (enforced in Postgres) |
-| Public wall | Video cards with a thumbnail and play button open an accessible lightbox; video is served through a short-lived signed redirect |
-| Client approval | One-time approval link (`/a/{token}`, hash stored only) for an edited quote; client approves or suggests changes; editing the quote voids the approval; approvals on Home |
-| Reminders | Copying the reminder message records it; "Needs a reminder" filter counts from the last reminder |
-
-## What's in Phase 4b
-
-| Area | Included |
-| --- | --- |
-| Widget | `/admin/widgets`: grid, carousel, single card, scrolling wall, rating badge; source (all/featured/tag/collection), theme, fields; live preview at 3 widths; script snippet (auto-resizing iframe) or plain iframe; carries the workspace public key |
-| Image cards | PNG export of any testimonial at 1080×1080, 1200×627 and 1080×1920 in 3 designs using the site's colours and fonts; consent enforced |
-| CSV & export | Client CSV export and import (dry-run preview, duplicate and error report); Settings → Data: all tables as JSON + CSV with media links, and a ZIP of all media |
-| Custom CSS | Appearance → Theme: scoped to public pages, validated on save and render |
-
-**Not built yet (unscheduled):** workspace deletion with 30-day purge, super admin per-workspace export, TOTP two-factor,
-custom head snippet, collection-as-PDF (brief "nice-to-have").
-
-## Local setup
-
-Requirements: Node 20.9+ (Node 22 LTS recommended; on Node 20 the app supplies `ws` as the WebSocket for supabase-js), Docker Desktop (running).
+You need Node 20.9+ (22 LTS recommended) and Docker Desktop running.
 
 ```bash
+git clone <this repo> testimonial-collector && cd testimonial-collector
 npm install
-npm run db:start          # starts local Supabase and applies supabase/migrations
-npx supabase status       # prints API URL, anon key, service_role key
-cp .env.example .env.local
+npm run db:start                 # local Supabase in Docker, applies all migrations
+cp .env.example .env.local       # then paste the URL + keys printed by `npx supabase status`
+npm run seed:admin               # super admin (SUPER_ADMIN_EMAIL / SUPER_ADMIN_PASSWORD)
+npm run seed:demo                # optional: demo workspace with sample testimonials
+npm run dev                      # http://localhost:3000
 ```
 
-Fill `.env.local` with the values from `supabase status`, set `SUPER_ADMIN_PASSWORD` (12+ characters)
-and a random `IP_HASH_SALT`. Then:
+The [Getting started](docs/getting-started.md) guide covers each step, plus using Supabase Cloud instead of Docker.
 
-```bash
-npm run seed:admin        # creates the super admin for SUPER_ADMIN_EMAIL
-npm run dev               # http://localhost:3000
-```
+## Tech stack
 
-Sign in as the super admin, create a workspace, open the invite link in a private window,
-and set the owner's password. Local auth emails (password reset) land in Mailpit at
-http://127.0.0.1:54324.
-
-### Using Supabase Cloud instead of Docker
-
-```bash
-npx supabase login
-npx supabase link --project-ref YOUR_PROJECT_REF      # prompts for the database password
-npx supabase db push --linked                          # applies supabase/migrations
-npx supabase config push                               # auth: sign-up off, 8-char passwords, redirect URLs; storage limit
-```
-
-Then set `.env.local` to the project URL and keys (Dashboard → Project Settings → API), pick a new random
-`IP_HASH_SALT`, and run `npm run seed:admin`. `config push` shows a diff first: review it, because the local
-`config.toml` also holds development-only values. On the free plan the storage limit is 50 MB
-(migration `20261001000001` sets the bucket to match).
-
-### Environment variables
-
-| Variable | Where | Purpose |
-| --- | --- | --- |
-| `NEXT_PUBLIC_SUPABASE_URL` | client + server | Supabase API URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | client + server | Public anon key (all access is still governed by RLS) |
-| `SUPABASE_SERVICE_ROLE_KEY` | **server only** | Invite acceptance, token-scoped public form, super-admin metadata, audit log |
-| `NEXT_PUBLIC_APP_URL` | server | Base URL used in request and invite links |
-| `IP_HASH_SALT` | server | Salt for hashing IPs in the audit log and submissions |
-| `NEXT_PUBLIC_VIDEO_MAX_MB` | client + server | Largest video upload (default 50, the Supabase free-plan cap; 100 on a paid plan) |
-| `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` | seed script only | Super admin bootstrap |
-
-## Tests
-
-```bash
-npm run typecheck
-npm run test:unit         # form engine, snapshot, validation, consent guard (no database needed)
-npm run test:isolation    # needs local Supabase running and .env.local filled in
-```
-
-The isolation suite creates two workspaces with a row in every business table plus a stored file, then
-asserts that owner A cannot list, read, update, delete, insert into, cross-link to, or download anything of
-workspace B. It also checks that anonymous users see nothing, sign-up is disabled, privileged functions are
-not callable, request tokens resolve to exactly one workspace, and suspension and disabling behave as specified.
-
-## Deploy (Vercel + Supabase Cloud)
-
-1. Create a Supabase project. In **Auth → Providers → Email**, turn off "Allow new users to sign up".
-   Set **Site URL** to your production URL and add `https://your-app/auth/confirm` to the redirect URLs.
-2. Link and push the schema: `npx supabase link --project-ref <ref>` then `npx supabase db push`.
-3. Import the repo into Vercel and set the environment variables above (`NEXT_PUBLIC_APP_URL` = production URL).
-4. Run `npm run seed:admin` locally with the production URL/keys in the environment to create the super admin.
-5. Supabase's daily backups are on by default for hosted projects.
-
-## Security notes
-
-- Isolation is enforced in Postgres (RLS + composite FKs), not only in application code. The service-role client
-  is used only in server code that scopes each query explicitly (see `src/lib/supabase/admin.ts`).
-- Invite tokens are stored as SHA-256 hashes only. Request tokens are 192-bit random.
-- Uploaded images are validated and re-encoded server-side with sharp, which strips EXIF (including GPS).
-  Everything lives in a private bucket and is served through short-lived signed URLs.
-- `/t/*` and `/invite/*` send `no-referrer`, `noindex` and `no-store` headers.
-- Rate limiting is in-memory (fine for one instance at the brief's scale); swap in a shared store if you scale out.
-- For Upwork clients, frame request links as feedback only, ideally after the contract ends.
+| | |
+| --- | --- |
+| App | Next.js 16 (App Router, Server Actions), React 19, TypeScript, Tailwind CSS 4 |
+| Data | Supabase: Postgres 17 with RLS, Auth, Storage |
+| Validation | Zod 4, with shared schemas for browser and server |
+| Media | sharp (re-encodes images and strips EXIF), MediaRecorder video, `next/og` image cards |
+| Tests | Vitest: unit, database isolation and HTTP tests |
 
 ## Project layout
 
 ```
-supabase/migrations/     schema, RLS, workspace seeding, storage policies
-scripts/seed-superadmin.ts
-src/proxy.ts             session refresh + auth gate for /admin and /superadmin
-src/lib/                 auth, supabase clients, form engine (snapshot, steps, validation), uploads, consent
-src/app/superadmin/      super admin panel
-src/app/admin/           owner dashboard
-src/app/t/[token]/       client-facing testimonial form
-src/app/invite/[token]/  invite acceptance
-tests/                   unit + isolation tests
+supabase/migrations/   schema, RLS, triggers and public read functions (append-only)
+src/app/               routes: admin/ (owners), superadmin/, t/ (client form), [slug]/ (public), embed/
+src/lib/               domain logic: form engine, site theming, widget, exports, auth, storage paths
+src/components/        UI primitives and public-site components
+scripts/               seed scripts
+tests/                 Vitest suites
+docs/                  architecture, guides, security review, build history
 ```
+
+## Security
+
+Tenant isolation is enforced in Postgres, not only in application code. A [full security review](docs/security-review-2026-09.md)
+of the codebase, its findings and fixes are documented, with regression tests. Please report vulnerabilities privately:
+see [SECURITY.md](SECURITY.md).
+
+## Status
+
+Every feature in the original product brief has been built. Not built yet:
+- workspace deletion with a 30-day grace period
+- two-factor login (TOTP)
+- per-workspace export for the super admin
+- a custom `<head>` snippet
+- exporting a collection as a PDF
+
+These are good first contributions: see [CHANGELOG.md](CHANGELOG.md) and [docs/history](docs/history/).
+
+## Contributing
+
+Issues and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and the
+[extending guide](docs/extending.md), which walks through adding a table, a public field or a new screen
+without weakening isolation.
+
+## Credits
+
+Created by [Shoaib Hasnat](https://www.linkedin.com/in/shoaib-hasnat-066318428/).
+
+The app shows a small "Created by" credit in the dashboard, sign-in and public page footers. It is set in
+`src/lib/credits.ts`. The MIT license lets you change or remove it in your fork. A link back is appreciated.
+
+## License
+
+[MIT](LICENSE)

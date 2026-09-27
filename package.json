@@ -1,7 +1,12 @@
 {
-  "name": "app",
+  "name": "testimonial-collector",
   "version": "0.1.0",
   "private": true,
+  "description": "Multi-tenant app for collecting, managing and showcasing client testimonials. Next.js + Supabase.",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -9,12 +14,13 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:unit": "vitest run tests/form.test.ts",
-    "test:isolation": "vitest run tests/isolation.test.ts",
+    "test:unit": "vitest run tests/form.test.ts tests/form-settings.test.ts tests/site-config.test.ts tests/security.test.ts",
     "db:start": "supabase start",
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
-    "seed:admin": "tsx scripts/seed-superadmin.ts"
+    "seed:admin": "tsx scripts/seed-superadmin.ts",
+    "test:db": "vitest run tests/isolation.test.ts tests/phase2.test.ts tests/phase3.test.ts tests/phase4a.test.ts tests/phase4b.test.ts tests/security-review.test.ts",
+    "seed:demo": "tsx scripts/seed-demo.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

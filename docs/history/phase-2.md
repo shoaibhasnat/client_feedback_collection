@@ -6,7 +6,7 @@
 | **Completed** | 28 Sep 2026 |
 | **Commits** | `ce9cb84` engine & DB rules · `52b859b` form builder · `16b6062` per-request customization · `7e58a36` client form preferences · `2afa545` settings, custom fields, tags · `e854405` consent editor, bulk actions, DB tests · `48b34e6` polish |
 | **Brief sections** | §9 Phase 2, §3.2, §3.3, §3.5, §3.7, §4.2 (custom fields, tags), §4.5 (tags, bulk actions, manual testimonials), §4.6, §4.7 |
-| **Builds on** | [Phase 1 — Collect](PHASE-1.md) · [App guide](../APP.md) |
+| **Builds on** | [Phase 1 — Collect](phase-1.md) · [App guide](../architecture.md) |
 
 ---
 

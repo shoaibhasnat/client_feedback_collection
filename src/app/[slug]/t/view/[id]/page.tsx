@@ -5,6 +5,7 @@ import { SiteFrame, TestimonialCard } from "@/components/site/public-site";
 import { getPublicSite, getPublicWorkspace } from "@/lib/site/public-data";
 import { reviewJsonLd, siteMetadata } from "@/lib/site/seo";
 import { SiteUnavailable } from "../../../unavailable";
+import { Credits } from "@/components/credits";
 
 async function load(slug: string, id: string) {
   const workspace = await getPublicWorkspace(slug);
@@ -68,6 +69,9 @@ export default async function TestimonialPage({ params }: PageProps<"/[slug]/t/v
           )}
         </div>
       </main>
+      <footer className="mx-auto max-w-6xl border-t border-[var(--site-border)] px-5 py-6 text-[0.85em] text-[var(--site-muted)]">
+        <Credits />
+      </footer>
       <SiteAnalytics seo={site.seo} />
     </SiteFrame>
   );

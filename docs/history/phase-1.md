@@ -6,7 +6,7 @@
 | **Completed** | 27 Sep 2026 |
 | **Commit** | `d280f7f` — *Phase 1 (Collect): multi-tenant testimonial collector MVP* |
 | **Brief sections** | §9 Phase 1, §10 (multi-tenancy, super admin), plus the parts of §3, §4, §7, §8 it depends on |
-| **App reference** | [docs/APP.md](../APP.md) |
+| **App reference** | [docs/architecture.md](../architecture.md) |
 
 ---
 

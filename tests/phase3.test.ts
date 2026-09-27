@@ -7,6 +7,7 @@
  * HTTP checks run against the dev/prod server at NEXT_PUBLIC_APP_URL and are skipped if it's down.
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { CREDIT } from "@/lib/credits";
 import { adminClient, anonClient, cleanupRun, createTenant, destroyTenant, runId, type Tenant } from "./helpers";
 
 let A: Tenant;
@@ -160,6 +161,7 @@ describe("public pages over HTTP", () => {
     expect(text).toContain(`Untagged quote ${runId}`);
     expect(text).not.toContain(`B quote ${runId}`);
     expectNoPrivate(text);
+    expect(text).toContain(CREDIT.url); // "Created by" credit in the footer
   });
 
   it("?tag= shows only matching testimonials (by name or id)", async ({ skip }) => {

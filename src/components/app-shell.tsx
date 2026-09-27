@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signOut } from "@/app/login/actions";
 import { NavLinks, type NavItem } from "@/components/nav-links";
+import { Credits } from "@/components/credits";
 
 export function AppShell({
   brand,
@@ -36,6 +37,7 @@ export function AppShell({
             <form action={signOut}>
               <button className="mt-1 text-sm font-medium text-slate-700 hover:text-slate-900">Sign out</button>
             </form>
+            <Credits className="mt-4 text-xs text-slate-400" />
           </div>
         </aside>
         <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 sm:py-8">
@@ -43,6 +45,7 @@ export function AppShell({
           <form action={signOut} className="mt-10 md:hidden">
             <button className="text-sm text-slate-500">Sign out ({userLabel})</button>
           </form>
+          <Credits className="mt-4 text-xs text-slate-400 md:hidden" />
         </main>
       </div>
     </div>

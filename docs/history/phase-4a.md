@@ -6,7 +6,7 @@
 | **Completed** | 27 Sep 2026 |
 | **Commits** | `a7d3292` video step on the client form · `742aea6` owner video review + client approval links · `e27a11c` wall video, reminder polish, approvals on Home · `51d294b` tests · docs |
 | **Brief sections** | §3.4 (video), §4.4 (client approval), §4.2 (reminders), §9 Phase 4 |
-| **Builds on** | [Phase 1](PHASE-1.md) · [Phase 2](PHASE-2.md) · [Phase 3](PHASE-3.md) · [App guide](../APP.md) |
+| **Builds on** | [Phase 1](phase-1.md) · [Phase 2](phase-2.md) · [Phase 3](phase-3.md) · [App guide](../architecture.md) |
 
 ---
 

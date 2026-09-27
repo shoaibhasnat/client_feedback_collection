@@ -5,6 +5,7 @@ import { CardList, SiteFrame } from "@/components/site/public-site";
 import { getPublicCollection, getPublicSite, getPublicWorkspace } from "@/lib/site/public-data";
 import { reviewJsonLd, siteMetadata } from "@/lib/site/seo";
 import { SiteUnavailable } from "../../unavailable";
+import { Credits } from "@/components/credits";
 
 async function load(slug: string, collectionSlug: string) {
   const workspace = await getPublicWorkspace(slug);
@@ -71,6 +72,9 @@ export default async function CollectionPage({ params }: PageProps<"/[slug]/c/[c
           </p>
         )}
       </main>
+      <footer className="mx-auto max-w-6xl border-t border-[var(--site-border)] px-5 py-6 text-[0.85em] text-[var(--site-muted)]">
+        <Credits />
+      </footer>
       <SiteAnalytics seo={site.seo} />
     </SiteFrame>
   );

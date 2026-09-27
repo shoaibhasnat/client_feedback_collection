@@ -1,11 +1,11 @@
-# Testimonial Collector — Application Guide
+# Architecture
 
-This is the app-level reference: what the system is, how it is put together, and the rules
-that every phase builds on. Phase-specific scope, status and verification live in
-[`docs/phases/`](phases/). Setup and deploy commands live in the [README](../README.md).
+This is the reference for how the system is built and the rules every change must keep. For setup see
+[Getting started](getting-started.md); for adding features see [Extending](extending.md).
 
-- **Source of truth for requirements:** *Testimonial Collector App — Developer Brief* (Sep 27, 2026), in the parent folder.
-- **Current state:** Phases 1–3 (Collect, Configure, Showcase) complete. See [Phase 1](phases/PHASE-1.md) · [Phase 2](phases/PHASE-2.md) · [Phase 3](phases/PHASE-3.md).
+References to "the brief" (e.g. "brief §5.3") point to the original product specification the project
+was built from; the relevant requirements are restated in these docs. The build history, with each
+phase's scope and verification, is in [`history/`](history/).
 
 ---
 
@@ -27,17 +27,8 @@ a **super admin** creates workspaces and invites owners.
 | Super admin | Seeded by script (`SUPER_ADMIN_EMAIL`). No UI grants this role. | Manage workspaces, invites, users, global settings and the audit log. Sees **metadata and counts only**, never business data. |
 | Workspace owner | Accepts a single-use invite link | Everything inside their own workspace: clients, projects, requests, submissions, testimonials, settings. |
 | Client (respondent) | Opens a request link `/t/{token}`. No account. | Fills in the testimonial form for that one request. |
-| Visitor | Public URLs (Phase 3+) | Views published, consent-limited testimonials. |
-
-### Phase roadmap
-
-| Phase | Name | Scope | Status |
-| --- | --- | --- | --- |
-| 1 | Collect | Tenancy + RLS, super admin, invites, login, clients/projects CRM, request links, client form (no video), inbox, basic testimonial editing | ✅ Done — [details](phases/PHASE-1.md) |
-| 2 | Configure | Form builder, per-client/per-request form settings, multiple templates, custom fields, full consent enforcement, manual testimonials, tags | ✅ Done — [details](phases/PHASE-2.md) |
-| 3 | Showcase | Public wall, appearance/theme editor, filtered links, collections, single-testimonial pages, SEO | ✅ Done — [details](phases/PHASE-3.md) |
-| 4a | Extras (part 1) | Video record/upload + download, video on the wall, client approval flow, reminders polish | ✅ Done — [details](phases/PHASE-4A.md) |
-| 4b | Extras (part 2) | Embeddable widget, image cards, CSV import/export + data export, custom CSS | ✅ Built — [details](phases/PHASE-4B.md) |
+| Client approving a quote | Opens an approval link `/a/{token}`. No account. | Approves the owner's edited wording or suggests changes. |
+| Visitor | Public URLs and embedded widgets | Views published, consent-limited testimonials. |
 
 ---
 
@@ -51,8 +42,9 @@ a **super admin** creates workspaces and invites owners.
 | Supabase clients | `@supabase/ssr`, `@supabase/supabase-js` | On Node 20 the `ws` package is passed as the realtime transport (`src/lib/supabase/transport.ts`). |
 | Validation | Zod 4 | Form schemas are generated at runtime from form items. Shared by browser and server. |
 | Images | sharp | Server-side validation, re-encode to WebP, EXIF strip, square crop. |
-| Tests | Vitest 3 | Unit tests + database isolation tests against local Supabase. |
-| Hosting target | Vercel + Supabase Cloud (free tiers) | See README → Deploy. |
+| Tests | Vitest 3 | Unit tests + database/HTTP tests against a Supabase stack. |
+| Exports | fflate, next/og | ZIP exports (streamed for media); PNG image cards and Open Graph images. |
+| Hosting target | Vercel + Supabase Cloud (free tiers work) | See [Deployment](deployment.md). |
 
 Runtime: Node 20.9+ works; **Node 22 LTS is recommended**.
 
@@ -68,8 +60,10 @@ Browser ──► proxy.ts (session refresh, gate /admin & /superadmin)
    ├── /superadmin/**   ─► requireSuperAdmin() (every page + action) ─► service-role client (metadata only)
    ├── /admin/**        ─► requireOwner()      ─► user client (RLS-scoped)
    ├── /t/[token]       ─► loadRequestByToken() ─► service-role client pinned to one request
+   ├── /a/[token]       ─► loadApproval()       ─► service-role client pinned to one testimonial (hash lookup)
    ├── /{slug}, /{slug}/c/{c}, /{slug}/t/view/{id} ─► anon client ─► public_* SECURITY DEFINER functions
-   └── /api/public/{media,brand,og}/…  ─► DB-approved path ─► stream from private bucket / render card
+   ├── /embed/{key}/{id}, /widget.js ─► anon client ─► public_widget() + public_* functions (frameable)
+   └── /api/public/{media,brand,og}/…  ─► DB-approved path ─► stream / signed redirect / render card
                                                      │
                                           Supabase: Postgres (RLS) + Storage (private bucket)
 ```
@@ -80,7 +74,7 @@ Browser ──► proxy.ts (session refresh, gate /admin & /superadmin)
 | --- | --- | --- | --- |
 | **User client** (anon key + session cookie) | `src/lib/supabase/server.ts` | Owner dashboard, all owner Server Actions | Postgres RLS limits every query to the caller's workspace. App code cannot bypass it. |
 | **Anon client + public functions** | `src/lib/site/public-data.ts` | Public wall, collections, single pages, OG cards | Anon has no table access; `public_*` functions return public columns of published items in active workspaces only. |
-| **Service-role client** | `src/lib/supabase/admin.ts` | Public token form, invite acceptance, super admin panel, audit log, sign-in bookkeeping | Bypasses RLS. **Every query must be scoped explicitly** (by token, invite hash, or super-admin check). Server-only (`import "server-only"`). |
+| **Service-role client** | `src/lib/supabase/admin.ts` | Public token form, approval page, invite acceptance, super admin panel, audit log, sign-in bookkeeping, public media streaming | Bypasses RLS. **Every query must be scoped explicitly** (by token, invite hash, or super-admin check), and every storage path it touches must pass `isSafeStoragePath()`. Server-only (`import "server-only"`). |
 
 Rule of thumb: owner features always use the user client. Reach for the service-role client only
 when there is no signed-in owner (token form, invites) or the caller is the super admin, and scope
@@ -111,48 +105,50 @@ to `activity_log`.
 ## 4. Source layout
 
 ```
-app/
+.
 ├─ supabase/
 │  ├─ config.toml                     local stack config (public sign-up disabled)
-│  └─ migrations/
-│     ├─ 20260927000001_core.sql      enums, tables, tenancy helpers, RLS, triggers
-│     ├─ 20260927000002_seed_storage.sql  seed_workspace(), superadmin stats, storage bucket + policies
-│     ├─ 20260928000001_phase2_configure.sql  prefill field, presets, submission column grants,
-│     │                                  consent + media triggers, frozen snapshots
-│     └─ 20260929000001_phase3_public_api.sql  anon-callable public_* read functions
-├─ scripts/seed-superadmin.ts         super admin bootstrap
+│  └─ migrations/                     append-only; applied in filename order
+│     ├─ …_core.sql                   enums, tables, tenancy helpers, RLS, triggers
+│     ├─ …_seed_storage.sql           seed_workspace(), super admin stats, storage bucket + policies
+│     ├─ …_phase2_configure.sql       prefill, presets, submission column grants, consent + media triggers
+│     ├─ …_phase3_public_api.sql      anon-callable public_* read functions
+│     ├─ …_phase4a_video_approval.sql video columns, approval flow, video-aware consent
+│     ├─ …_free_plan_video_limit.sql  50 MB bucket limit (Supabase free plan)
+│     ├─ …_phase4b_widgets.sql        public_widget()
+│     └─ …_security_storage_paths.sql is_workspace_path(): strict storage path validation
+├─ scripts/                           seed-superadmin.ts, seed-demo.ts
 ├─ src/
 │  ├─ proxy.ts                        session refresh + auth gate
 │  ├─ lib/
 │  │  ├─ supabase/{server,admin,transport}.ts
 │  │  ├─ auth.ts                      requireOwner / requireSuperAdmin / assertWritable
-│  │  ├─ form/
-│  │  │  ├─ types.ts                  FormItemRow, ItemSettings, SnapshotItem, TemplateSnapshot, FormPreset, Step
-│  │  │  ├─ settings.ts               per-item settings: precedence, presets, diffs, input cleaning
-│  │  │  ├─ snapshot.ts               buildSnapshot(): freeze template + resolve per-item settings
-│  │  │  ├─ steps.ts                  buildSteps, validation (Zod), sanitizeValues, consentText
-│  │  │  └─ catalog.ts                type labels, section/type rules, mapping compatibility
-│  │  ├─ form-customize.ts            request overrides / client defaults as diffs, preview extras
-│  │  ├─ form-preview.ts              builder preview (sample client)
-│  │  ├─ custom-fields.ts             custom field types, parsing, formatting
-│  │  ├─ tags.ts                      tag types, colours, id picking
-│  │  ├─ site/                        public site: config (theme/layout/SEO schemas, presets, CSS),
-│  │  │                               public-data (cached anon reads), cache (tags), media, og, seo, fonts, types
-│  │  ├─ requests.ts                  prepareSnapshot, insertRequest, buildMessage
-│  │  ├─ public-form.ts               loadRequestByToken, branding, signed form images
-│  │  ├─ invites.ts                   issueInvite (hash-only storage), lookupInvite
-│  │  ├─ consent.ts                   consentViolations() publishing guard
-│  │  ├─ uploads.ts                   processImage (sharp), storeImage, signPaths, removeFolder
-│  │  ├─ audit.ts                     logAudit (platform), logActivity (workspace timeline)
-│  │  ├─ crypto.ts, rate-limit.ts, superadmin.ts, constants.ts, utils.ts, env.ts
-│  ├─ components/                     AppShell, AuthShell, NavLinks, ui primitives
+│  │  ├─ form/                        form engine: types, settings, snapshot, steps (validation), catalog
+│  │  ├─ site/                        public site: config (theme/layout/SEO, custom CSS), public-data,
+│  │  │                               cache tags, media streaming, og, seo, fonts, types
+│  │  ├─ widget/config.ts             widget settings, testimonial selection, snippets
+│  │  ├─ cards/image-card.tsx         PNG image cards (3 sizes × 3 designs)
+│  │  ├─ csv.ts, clients-csv.ts       CSV read/write (formula-safe), client import/export
+│  │  ├─ export.ts                    full workspace export (tables + media listing)
+│  │  ├─ storage-path.ts              isSafeStoragePath(): the only way to trust a stored path
+│  │  ├─ approval.ts, approval-token.ts  client approval helpers and token lookup
+│  │  ├─ video-limits.ts              upload limit + recording bitrate
+│  │  ├─ requests.ts, public-form.ts, invites.ts, consent.ts, uploads.ts, audit.ts,
+│  │  │  custom-fields.ts, tags.ts, form-customize.ts, form-preview.ts
+│  │  └─ crypto.ts, rate-limit.ts, superadmin.ts, constants.ts, utils.ts, env.ts
+│  ├─ components/                     AppShell, NavLinks, ui primitives, site/ (public page, widget, lightbox)
 │  └─ app/
 │     ├─ login, forgot-password, reset-password, auth/confirm, invite/[token]
-│     ├─ superadmin/                  workspaces, workspaces/[id], users, invites, audit, settings
-│     ├─ admin/                       home, clients, projects, requests, testimonials, forms, settings
-│     └─ t/[token]/                   public client form (page, actions, form-flow)
-├─ tests/                             form.test.ts, isolation.test.ts, helpers.ts
-└─ docs/                              APP.md (this file), phases/PHASE-N.md
+│     ├─ superadmin/                  workspaces, users, invites, audit, settings
+│     ├─ admin/                       home, clients (+ CSV), projects, requests, testimonials (+ image cards),
+│     │                               forms, collections, widgets, settings (appearance, data, …)
+│     ├─ t/[token]/                   public client form (incl. video step)
+│     ├─ a/[token]/                   client approval page
+│     ├─ [slug]/                      public wall, collections, single testimonials
+│     ├─ embed/, widget.js/           embeddable widget
+│     └─ api/public/                  media, brand and OG image routes
+├─ tests/                             Vitest suites (see docs/testing.md)
+└─ docs/
 ```
 
 Conventions per route folder: `page.tsx` (server component, data loading), `actions.ts`
@@ -185,7 +181,7 @@ Tenancy helper functions (all `security definer`, `search_path = ''`):
 Uniqueness is per workspace where the brief requires it: `unique (workspace_id, name)` on tags,
 `unique (workspace_id, slug)` on collections, `unique (workspace_id, entity, key)` on custom fields.
 
-**Verified by** `tests/isolation.test.ts` (see [Phase 1 → Verification](phases/PHASE-1.md#6-verification)).
+**Verified by** `tests/isolation.test.ts` (see [Phase 1 → Verification](history/phase-1.md#6-verification)).
 
 ---
 
@@ -265,13 +261,15 @@ preset, message templates, reminder days = 3) and the default **Standard** templ
 | Rate limiting | In-memory fixed window (`rate-limit.ts`): login, password reset, invite acceptance, token lookup, autosave, uploads, submit. Swap for a shared store if horizontally scaled. |
 | Spam | Honeypot field on the client form (bot submissions are silently discarded). |
 | Uploads | Type + size checked; images decoded and re-encoded with sharp (strips EXIF incl. GPS); PDFs checked for `%PDF-` magic. Stored privately, served via short-lived signed URLs. |
-| Headers | `nosniff`, `SAMEORIGIN` frame policy, strict referrer; `/t/*` and `/invite/*` add `no-referrer`, `noindex`, `no-store`. |
+| Headers | `nosniff`, `SAMEORIGIN` frame policy (except `/embed/*`, which is frameable by any site), strict referrer; `/t/*`, `/a/*` and `/invite/*` add `no-referrer`, `noindex`, `no-store`. |
 | IP addresses | Only salted hashes are stored (`IP_HASH_SALT`). |
 | Consent | Level, exact text shown and timestamp stored per submission. Enforced in the database: the `enforce_testimonial_rules` trigger reads consent from the submission and rejects publishing beyond it; withdrawal auto-unpublishes. `consentViolations()` mirrors the rules in the UI. |
 | Submission integrity | Owners can't insert submissions or change answers/consent (column-level grants). |
-| Media references | Testimonial photo/logo must be files in the workspace's folder; proof may also be an http(s) link (trigger). |
+| Media references | Stored paths must match `{workspace uuid}/{folder}/…/{name}[.ext]` exactly (`is_workspace_path()` in SQL, `isSafeStoragePath()` in TS). A plain "starts with" check is not enough: storage clients resolve `..`, so `{mine}/../{theirs}/x` would reach another workspace. Proof may also be an http(s) link. |
 | Public pages | Read only through anon `public_*` functions (explicit public columns, published only, active workspaces). Media streamed only for DB-approved paths. Tested: no private value in any public response or page source. |
-| Shared origin | No owner-supplied HTML/JS on public pages: theme CSS built from validated values; analytics limited to Plausible/GA4 IDs; custom CSS (Phase 4) must be scoped and sanitised. |
+| Shared origin | Public pages share the dashboard's origin (and session cookie), so **no owner-supplied HTML/JS ever reaches them**: theme CSS built from validated values; analytics limited to Plausible/GA4 IDs; custom CSS validated on save and on render and nested under `.tc-site`; links from stored data pass `safeHref()` (http/https/mailto only). |
+| Shared storage | One bucket for all workspaces: public upload endpoints are rate-limited and capped per submission (20 files, one pending video). |
+| Exports | Read with the owner's session (RLS-scoped); request/approval tokens excluded; CSV cells neutralised against formula injection. |
 | Right to be forgotten | Deleting a client cascades to projects, requests, submissions, testimonials, notes, activity and removes their files. |
 | Super admin | Server-side check on every request and action; no business data in the panel; no impersonation. |
 | Suspension | Owner read-only (enforced by `can_write` in RLS); request links show "temporarily unavailable". |
@@ -288,6 +286,7 @@ preset, message templates, reminder days = 3) and the default **Standard** templ
 | `SUPABASE_SERVICE_ROLE_KEY` | **server only** | Service-role client |
 | `NEXT_PUBLIC_APP_URL` | server | Base URL in request and invite links |
 | `IP_HASH_SALT` | server | Salt for IP hashing |
+| `NEXT_PUBLIC_VIDEO_MAX_MB` | client + server | Largest video upload (default 50 = Supabase free-plan cap) |
 | `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD` | seed script | Super admin bootstrap (password ≥ 12 chars) |
 
 `next.config.ts` raises the Server Action body limit to 18 MB (image uploads go through Server Actions).
@@ -298,13 +297,19 @@ preset, message templates, reminder days = 3) and the default **Standard** templ
 | --- | --- |
 | `dev`, `build`, `start` | Next.js |
 | `typecheck`, `lint` | `tsc --noEmit`, ESLint |
-| `test`, `test:unit`, `test:isolation` | Vitest (isolation needs local Supabase + `.env.local`) |
+| `test` | All Vitest suites (needs a Supabase stack + `.env.local`) |
+| `test:unit` | Suites that need no database |
+| `test:db` | Database and HTTP suites |
 | `db:start`, `db:stop`, `db:reset` | Local Supabase stack |
 | `seed:admin` | Create/update the super admin |
+| `seed:demo` | Demo workspace, owner and testimonials (local stack only) |
 
 ---
 
 ## 9. Conventions for contributors
+
+See also [Extending](extending.md) for step-by-step recipes.
+
 
 - **Read the bundled Next.js docs** (`node_modules/next/dist/docs/`) before using an API; v16 differs from older versions (see `AGENTS.md`).
 - **Owner mutations** start with `assertWritable()` and use `ctx.supabase` (RLS). Pass `workspace_id: ctx.workspace.id` explicitly on inserts.
@@ -319,4 +324,6 @@ preset, message templates, reminder days = 3) and the default **Standard** templ
 - **Cache**: any owner change that can alter public output must call `revalidateSite(workspaceId)`.
 - **To-one embeds** from PostgREST can arrive as objects or arrays; normalise with `one()` from `lib/utils`.
 - Log owner-visible events with `logActivity`; log platform/security events with `logAudit`.
+- **Storage paths** from the database are untrusted: check them with `isSafeStoragePath()` before any service-role read, sign or delete.
+- **Links** built from stored URLs go through `safeHref()`.
 - Keep migrations append-only; never edit a migration that has been applied to a shared database.

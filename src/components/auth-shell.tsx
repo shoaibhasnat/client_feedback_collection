@@ -1,3 +1,5 @@
+import { Credits } from "@/components/credits";
+
 export function AuthShell({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <main className="flex flex-1 items-center justify-center px-4 py-12">
@@ -8,6 +10,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
           {subtitle && <p className="mt-1 text-sm text-slate-500">{subtitle}</p>}
           <div className="mt-6">{children}</div>
         </div>
+        <Credits className="mt-6 text-center text-xs text-slate-400" />
       </div>
     </main>
   );

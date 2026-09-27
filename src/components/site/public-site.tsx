@@ -5,6 +5,7 @@ import { scopedCustomCss, themeCss } from "@/lib/site/config";
 import { fontStack } from "@/lib/site/fonts";
 import { VideoLightbox } from "@/components/site/video-lightbox";
 import type { PublicSite, PublicTag, PublicTestimonial } from "@/lib/site/types";
+import { Credits } from "@/components/credits";
 
 // Presentational components for the public wall, collections and single-testimonial pages.
 // No data access here: the public routes and the dashboard's live preview render the same markup.
@@ -422,8 +423,9 @@ export function PublicWall({
           ))}
       </main>
       <footer className="mt-10 border-t border-[var(--site-border)]">
-        <div className="mx-auto max-w-6xl px-5 py-6 text-[0.85em] text-[var(--site-muted)]">
-          {c.footer_text || `© ${brand.siteName}`}
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-5 py-6 text-[0.85em] text-[var(--site-muted)]">
+          <p>{c.footer_text || `© ${brand.siteName}`}</p>
+          <Credits />
         </div>
       </footer>
     </>
