@@ -3,7 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { randomToken } from "@/lib/crypto";
 import { env } from "@/lib/env";
 import { buildSnapshot, type ClientRecord, type ProjectRecord } from "@/lib/form/snapshot";
-import type { FormItemRow, TemplateCopy, TemplateSettings } from "@/lib/form/types";
+import { cleanOverrideMap } from "@/lib/form/settings";
+import type { FormItemRow, OverrideMap, TemplateCopy, TemplateSettings } from "@/lib/form/types";
 import { fillTemplate, firstName } from "@/lib/utils";
 
 export function requestUrl(token: string) {
@@ -13,7 +14,14 @@ export function requestUrl(token: string) {
 /** Load everything needed to snapshot a template for one client/project (RLS-scoped client). */
 export async function prepareSnapshot(
   supabase: SupabaseClient,
-  args: { workspaceId: string; clientId: string; projectId: string | null; templateId: string | null },
+  args: {
+    workspaceId: string;
+    clientId: string;
+    projectId: string | null;
+    templateId: string | null;
+    /** Per-request settings from the "Customize form" step (brief §3.7). */
+    overrides?: OverrideMap;
+  },
 ) {
   const templateQuery = supabase.from("form_templates").select("id, name, settings, copy").is("archived_at", null);
   const [{ data: client }, { data: project }, { data: template }, { data: settings }] = await Promise.all([
@@ -33,17 +41,19 @@ export async function prepareSnapshot(
 
   const { data: items } = await supabase.from("form_items").select("*").eq("template_id", template.id);
   const profile = (settings?.profile ?? {}) as Record<string, string | null>;
+  const rows = ((items ?? []) as FormItemRow[]).filter((i) => !i.archived_at);
 
-  return buildSnapshot({
+  const built = buildSnapshot({
     template: {
       id: template.id,
       name: template.name,
       settings: template.settings as Partial<TemplateSettings>,
       copy: template.copy as TemplateCopy,
     },
-    items: (items ?? []) as FormItemRow[],
+    items: rows,
     client: client as ClientRecord,
     project: project as ProjectRecord | null,
+    overrides: args.overrides,
     owner: {
       name: profile.name ?? "",
       // Stored as a private storage path; the public form signs it at render time.
@@ -52,6 +62,12 @@ export async function prepareSnapshot(
       share_url: profile.share_url ?? "",
     },
   });
+  return {
+    ...built,
+    rows,
+    templateSettings: template.settings as Partial<TemplateSettings>,
+    clientDefaults: cleanOverrideMap(client.form_defaults),
+  };
 }
 
 export async function insertRequest(
@@ -63,6 +79,7 @@ export async function insertRequest(
     templateId: string | null;
     personalMessage: string | null;
     expiresAt: string | null;
+    overrides?: OverrideMap;
   },
 ) {
   const { snapshot, warnings } = await prepareSnapshot(supabase, args);
@@ -74,6 +91,7 @@ export async function insertRequest(
       project_id: args.projectId,
       template_id: snapshot.template.id,
       template_snapshot: snapshot,
+      item_overrides: cleanOverrideMap(args.overrides),
       token: randomToken(24),
       personal_message: args.personalMessage,
       expires_at: args.expiresAt,

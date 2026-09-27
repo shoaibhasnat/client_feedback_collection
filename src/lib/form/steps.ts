@@ -22,7 +22,8 @@ export function buildSteps(snapshot: TemplateSnapshot): Step[] {
   questions.forEach((item, index) => steps.push({ kind: "question", item, index, total: questions.length }));
   if (about.length) steps.push({ kind: "about", items: about });
   if (contact.length) steps.push({ kind: "contact", items: contact });
-  steps.push({ kind: "consent" });
+  // A hidden consent step means the answer is fixed to "private" (brief §3.7).
+  if (!snapshot.settings.consent_forced) steps.push({ kind: "consent" });
   return steps;
 }
 
@@ -124,7 +125,10 @@ export function validateItems(items: SnapshotItem[], values: Record<string, Answ
 export function validateStep(step: Step, values: FormValues, snapshot: TemplateSnapshot): FieldErrors {
   switch (step.kind) {
     case "rating":
-      if (values.rating !== null && (values.rating < 1 || values.rating > 5)) return { rating: "Pick 1 to 5 stars." };
+      if (values.rating === null) {
+        return snapshot.settings.rating_required ? { rating: "Please choose a rating." } : {};
+      }
+      if (values.rating < 1 || values.rating > 5) return { rating: "Pick 1 to 5 stars." };
       return {};
     case "question":
       return validateItems([step.item], values.answers);
@@ -173,18 +177,20 @@ export function sanitizeValues(input: Partial<FormValues>, snapshot: TemplateSna
 
   const rating =
     typeof input.rating === "number" && input.rating >= 1 && input.rating <= 5 ? Math.round(input.rating) : null;
-  const consent =
-    input.consent_level && CONSENT_LEVELS.includes(input.consent_level as ConsentLevel)
+  const forced = snapshot.settings.consent_forced ?? null;
+  const consent = forced
+    ? forced
+    : input.consent_level && CONSENT_LEVELS.includes(input.consent_level as ConsentLevel)
       ? (input.consent_level as ConsentLevel)
       : null;
 
   return {
-    rating,
+    rating: snapshot.settings.rating_enabled ? rating : null,
     answers: pick("question", input.answers),
     about: pick("about", input.about),
     contact: pick("contact", input.contact),
     consent_level: consent,
-    consent_confirmed: Boolean(input.consent_confirmed),
+    consent_confirmed: forced ? true : Boolean(input.consent_confirmed),
   };
 }
 
@@ -194,8 +200,8 @@ export function initialValues(snapshot: TemplateSnapshot): FormValues {
     answers: {},
     about: {},
     contact: {},
-    consent_level: null,
-    consent_confirmed: false,
+    consent_level: snapshot.settings.consent_forced ?? null,
+    consent_confirmed: Boolean(snapshot.settings.consent_forced),
   };
   for (const item of snapshot.items) {
     if (item.prefill_value === null) continue;
@@ -205,7 +211,11 @@ export function initialValues(snapshot: TemplateSnapshot): FormValues {
   return values;
 }
 
+export const FORCED_PRIVATE_CONSENT_TEXT =
+  "Consent step not shown: the owner set this feedback to Private (for the owner only, never published).";
+
 export function consentText(snapshot: TemplateSnapshot, level: ConsentLevel): string {
+  if (snapshot.settings.consent_forced) return FORCED_PRIVATE_CONSENT_TEXT;
   const description = snapshot.copy[`consent_${level}`] ?? level;
   const confirm = snapshot.copy.consent_confirm ?? "";
   return `${description} ${confirm}`.trim();

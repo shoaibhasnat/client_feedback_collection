@@ -19,12 +19,16 @@ type Props = {
   shareUrl: string | null;
   theme: PublicTheme;
   minutes: number;
+  /** Dashboard preview: renders exactly what the client sees, but never saves, uploads or submits. */
+  preview?: boolean;
 };
 
 export function FormFlow(props: Props) {
   const { snapshot, token } = props;
   const steps = useMemo(() => buildSteps(snapshot), [snapshot]);
-  const [stepIndex, setStepIndex] = useState(props.initialStep);
+  const [rawIndex, setStepIndex] = useState(props.initialStep);
+  // In preview the snapshot can shrink under us (owner hides items); stay on a valid screen.
+  const stepIndex = Math.min(rawIndex, steps.length - 1);
   const [values, setValues] = useState<FormValues>(props.initialValues);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [imageUrls, setImageUrls] = useState(props.initialImageUrls);
@@ -44,9 +48,10 @@ export function FormFlow(props: Props) {
       firstRender.current = false;
       return;
     }
+    if (props.preview) return;
     headingRef.current?.focus();
     window.scrollTo({ top: 0 });
-  }, [stepIndex, status]);
+  }, [stepIndex, status, props.preview]);
 
   const update = (section: "answers" | "about" | "contact", key: string, value: AnswerValue) => {
     setValues((v) => ({ ...v, [section]: { ...v[section], [key]: value } }));
@@ -76,7 +81,7 @@ export function FormFlow(props: Props) {
   const advance = (snapshotValues: FormValues) => {
     const target = stepIndex + 1;
     goTo(target);
-    if (step.kind === "welcome") return;
+    if (step.kind === "welcome" || props.preview) return;
     startTransition(async () => {
       const res = await saveProgress(token, target, snapshotValues);
       if (!res.ok) {
@@ -98,6 +103,10 @@ export function FormFlow(props: Props) {
     const stepErrors = validateStep(step, values, snapshot);
     if (Object.keys(stepErrors).length) {
       setErrors(stepErrors);
+      return;
+    }
+    if (props.preview) {
+      setStatus("done");
       return;
     }
     setStatus("saving");
@@ -133,7 +142,7 @@ export function FormFlow(props: Props) {
   const isLast = stepIndex === steps.length - 1;
 
   return (
-    <div className="tc-form flex min-h-screen flex-1 flex-col" style={style}>
+    <div className={cn("tc-form flex flex-1 flex-col", props.preview ? "min-h-[640px]" : "min-h-screen")} style={style}>
       {status !== "done" && stepIndex > 0 && (
         <div className="sticky top-0 z-10 bg-[var(--tc-bg)]/95 backdrop-blur">
           <div
@@ -197,7 +206,7 @@ export function FormFlow(props: Props) {
                 setErrors={setErrors}
                 imageUrls={imageUrls}
                 onImageUploaded={(path, url) => setImageUrls((m) => ({ ...m, [path]: url }))}
-                token={token}
+                token={props.preview ? "" : token}
                 personalMessage={props.personalMessage}
                 ownerPhotoUrl={props.ownerPhotoUrl}
                 minutes={props.minutes}
@@ -228,7 +237,7 @@ export function FormFlow(props: Props) {
                     : copy("next_button", "Next")}
               </button>
             </div>
-            {isSkippable(step) && (
+            {isSkippable(step, snapshot) && (
               <button
                 type="button"
                 onClick={skip}
@@ -244,8 +253,9 @@ export function FormFlow(props: Props) {
   );
 }
 
-function isSkippable(step: Step) {
-  return step.kind === "rating" || (step.kind === "question" && !step.item.required);
+function isSkippable(step: Step, snapshot: TemplateSnapshot) {
+  if (step.kind === "rating") return !snapshot.settings.rating_required;
+  return step.kind === "question" && !step.item.required;
 }
 
 type StepViewProps = {
@@ -303,7 +313,7 @@ function StepView({ headingRef, ...p }: StepViewProps) {
               {p.copy("rating_title", "How would you rate working with me overall?")}
             </h1>
           </legend>
-          <p className="mt-2 text-sm text-[var(--tc-muted)]">(optional)</p>
+          {!snapshot.settings.rating_required && <p className="mt-2 text-sm text-[var(--tc-muted)]">(optional)</p>}
           <StarInput
             name="rating"
             max={5}
@@ -751,6 +761,9 @@ function ImageUpload({
 
   if (item.prefill_locked) {
     return <p className="text-sm text-[var(--tc-muted)]">Already on file.</p>;
+  }
+  if (!token) {
+    return <p className="text-sm text-[var(--tc-muted)]">Image upload (disabled in preview).</p>;
   }
 
   return (
